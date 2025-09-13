@@ -1,0 +1,32 @@
+{
+  "name": "munim.ai",
+  "version": "1.0.0",
+  "description": "Backend for Munim.AI application",
+  "main": "server/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "nodemon server/server.js",
+    "test": "node server/scripts/testEndpoints.js",
+    "test:endpoints": "node server/scripts/testEndpoints.js",
+    "test:permissions": "node server/scripts/validatePermissions.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@clerk/clerk-sdk-node": "^4.13.23",
+    "@google/generative-ai": "^0.24.1",
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^7.0.3",
+    "node-fetch": "^3.3.2",
+    "svix": "^1.76.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
