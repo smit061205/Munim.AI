@@ -1,38 +1,23 @@
-import express from 'express';
+import express from "express";
+import { requireAuth } from "../middleware/clerkAuth.js";
+import {
+  getUserPermissions,
+  updatePermission,
+  updateMultiplePermissions,
+} from "../controllers/permissionsController.js";
 
 const router = express.Router();
 
-// Default allowed categories
-let allowedCategories = {
-    assets: true,
-    liabilities: true,
-    transactions: true,
-    epf: true,
-    creditScore: true,
-    investments: true
-};
+// Apply authentication middleware to all routes
+router.use(requireAuth);
 
-// GET /api/permissions
-router.get('/', (req, res) => {
-    res.json({ allowedCategories });
-});
+// GET /api/permissions - Get user's current permissions
+router.get("/", getUserPermissions);
 
-// POST /api/permissions
-router.post('/', (req, res) => {
-    const { categories } = req.body;
-    
-    if (!categories || typeof categories !== 'object') {
-        return res.status(400).json({ error: 'Invalid categories format' });
-    }
+// PUT /api/permissions - Update a specific permission
+router.put("/", updatePermission);
 
-    // Update only valid categories
-    Object.keys(categories).forEach(category => {
-        if (allowedCategories.hasOwnProperty(category)) {
-            allowedCategories[category] = Boolean(categories[category]);
-        }
-    });
-
-    res.json({ allowedCategories });
-});
+// PUT /api/permissions/bulk - Update multiple permissions at once
+router.put("/bulk", updateMultiplePermissions);
 
 export default router;

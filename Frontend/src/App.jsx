@@ -41,6 +41,25 @@ const FloatingAIButton = () => {
     return null;
   }
 
+  // Only show on protected routes (dashboard and other app pages)
+  const protectedRoutes = [
+    "/dashboard",
+    "/transactions",
+    "/accounts",
+    "/budgets",
+    "/investments",
+    "/reports",
+    "/settings",
+    "/permissions",
+  ];
+  const isProtectedRoute = protectedRoutes.some((route) =>
+    location.pathname.startsWith(route)
+  );
+
+  if (!isProtectedRoute) {
+    return null;
+  }
+
   return (
     <button
       onClick={() => openAIChat()}

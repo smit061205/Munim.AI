@@ -14,6 +14,9 @@ router.get(
   "/",
   handleAsync(async (req, res) => {
     const clerkId = req.auth.userId;
+    console.log(`🔐 Current authenticated clerkId: ${clerkId}`);
+    console.log(`🔐 Full auth object:`, req.auth);
+
     const categories = req.query.categories
       ? req.query.categories.split(",")
       : [];
@@ -36,6 +39,8 @@ router.get(
   "/monthly-spending",
   handleAsync(async (req, res) => {
     const clerkId = req.auth.userId;
+    console.log(`🔐 Current authenticated clerkId: ${clerkId}`);
+    console.log(`🔐 Full auth object:`, req.auth);
     const categories = req.query.categories
       ? req.query.categories.split(",")
       : [];
@@ -55,6 +60,8 @@ router.get(
   "/asset-liability",
   handleAsync(async (req, res) => {
     const clerkId = req.auth.userId;
+    console.log(`🔐 Current authenticated clerkId: ${clerkId}`);
+    console.log(`🔐 Full auth object:`, req.auth);
     const categories = req.query.categories
       ? req.query.categories.split(",")
       : [];
@@ -77,6 +84,8 @@ router.get(
   "/epf-contributions",
   handleAsync(async (req, res) => {
     const clerkId = req.auth.userId;
+    console.log(`🔐 Current authenticated clerkId: ${clerkId}`);
+    console.log(`🔐 Full auth object:`, req.auth);
     const categories = req.query.categories
       ? req.query.categories.split(",")
       : [];
@@ -99,6 +108,8 @@ router.get(
   "/credit-score",
   handleAsync(async (req, res) => {
     const clerkId = req.auth.userId;
+    console.log(`🔐 Current authenticated clerkId: ${clerkId}`);
+    console.log(`🔐 Full auth object:`, req.auth);
     const categories = req.query.categories
       ? req.query.categories.split(",")
       : [];
@@ -121,6 +132,8 @@ router.get(
   "/net-worth",
   handleAsync(async (req, res) => {
     const clerkId = req.auth.userId;
+    console.log(`🔐 Current authenticated clerkId: ${clerkId}`);
+    console.log(`🔐 Full auth object:`, req.auth);
     const categories = req.query.categories
       ? req.query.categories.split(",")
       : [];
@@ -143,6 +156,8 @@ router.get(
   "/spending-categories",
   handleAsync(async (req, res) => {
     const clerkId = req.auth.userId;
+    console.log(`🔐 Current authenticated clerkId: ${clerkId}`);
+    console.log(`🔐 Full auth object:`, req.auth);
     const categories = req.query.categories
       ? req.query.categories.split(",")
       : [];
@@ -154,34 +169,6 @@ router.get(
 
     res.json({
       status: "success",
-      data,
-      timestamp: new Date().toISOString(),
-    });
-  })
-);
-
-// Refresh dashboard with new permissions
-router.post(
-  "/refresh",
-  handleAsync(async (req, res) => {
-    const { allowedCategories } = req.body;
-    const clerkId = req.auth.userId;
-
-    if (!Array.isArray(allowedCategories)) {
-      return res.status(400).json({
-        status: "error",
-        message: "allowedCategories must be an array",
-      });
-    }
-
-    const data = await dashboardService.getCompleteDashboard(
-      allowedCategories,
-      clerkId
-    );
-
-    res.json({
-      status: "success",
-      message: "Dashboard data refreshed with new permissions",
       data,
       timestamp: new Date().toISOString(),
     });

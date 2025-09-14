@@ -79,7 +79,9 @@ const InvestmentChart = ({ data = null, investments = [] }) => {
         data: values,
         backgroundColor: colors || defaultColors.slice(0, labels.length),
         borderColor: colors
-          ? colors.map((c) => c.replace("0.8", "1"))
+          ? colors.map((c) =>
+              c && typeof c === "string" ? c.replace("0.8", "1") : c
+            )
           : defaultBorderColors.slice(0, labels.length),
         borderWidth: 2,
       },

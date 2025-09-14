@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useUser, useAuth } from "@clerk/clerk-react";
 import { usePermissions } from "../context/PermissionsContext";
 import { useAIChat } from "../context/AIChatContext";
@@ -14,8 +14,8 @@ import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
 import AIChatSidebar from "../components/AIChatSidebar";
 import ExpenseChart from "../components/Charts/ExpenseChart";
-import NetWorthChart from "../components/Charts/NetWorthChart";
 import InvestmentChart from "../components/Charts/InvestmentChart";
+import NetWorthChart from "../components/Charts/NetWorthChart";
 
 const DashboardPage = () => {
   const { user } = useUser();
@@ -34,17 +34,80 @@ const DashboardPage = () => {
   const [spendingCategories, setSpendingCategories] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [filteredData, setFilteredData] = useState(null);
+  const [selectedTimePeriod, setSelectedTimePeriod] = useState("1M");
+
+  // Filter data by time period
+  const filterDataByTimePeriod = (data, period) => {
+    const now = new Date();
+    let startDate;
+
+    switch (period) {
+      case "1M":
+        startDate = new Date(
+          now.getFullYear(),
+          now.getMonth() - 1,
+          now.getDate()
+        );
+        break;
+      case "3M":
+        startDate = new Date(
+          now.getFullYear(),
+          now.getMonth() - 3,
+          now.getDate()
+        );
+        break;
+      case "1Y":
+        startDate = new Date(
+          now.getFullYear() - 1,
+          now.getMonth(),
+          now.getDate()
+        );
+        break;
+      default:
+        startDate = new Date(
+          now.getFullYear(),
+          now.getMonth() - 1,
+          now.getDate()
+        );
+    }
+
+    // Handle different data structures from backend
+    return {
+      expenses: Array.isArray(data.expenses)
+        ? data.expenses.filter((item) => new Date(item.date) >= startDate)
+        : data.expenses?.monthlyData?.filter(
+            (item) => new Date(item.month) >= startDate
+          ) || [],
+      netWorth: Array.isArray(data.netWorth)
+        ? data.netWorth.filter((item) => new Date(item.date) >= startDate)
+        : data.netWorth?.monthlyData?.filter(
+            (item) => new Date(item.month) >= startDate
+          ) || [],
+      transactions: Array.isArray(data.transactions)
+        ? data.transactions.filter((item) => new Date(item.date) >= startDate)
+        : [],
+    };
+  };
 
   useEffect(() => {
     const fetchData = async () => {
-      console.log("🚀 DashboardPage: Starting data fetch...");
-      setLoading(true);
+      if (!getAllowedCategories().length > 0) return;
 
+      setLoading(true);
       try {
-        console.log("📡 Making API calls to backend...");
-        const authApi = createAuthenticatedApi(getToken);
+        const token = await getToken();
+        const authApi = createAuthenticatedApi(() => Promise.resolve(token));
+
+        // Get allowed categories based on permissions
         const allowedCategories = getAllowedCategories();
 
+        console.log(
+          "🔍 Fetching dashboard data with categories:",
+          allowedCategories
+        );
+
+        // Fetch data from multiple endpoints
         const [
           dashboardResponse,
           monthlySpendingResponse,
@@ -57,131 +120,69 @@ const DashboardPage = () => {
           fetchSpendingCategories(authApi, allowedCategories),
         ]);
 
-        console.log("📊 API Responses received:", {
-          dashboard: {
-            status: dashboardResponse.status,
-            data:
-              dashboardResponse.status === "fulfilled"
-                ? dashboardResponse.value.data.data
-                : null,
-            error:
-              dashboardResponse.status === "rejected"
-                ? dashboardResponse.reason
-                : null,
-          },
-          monthlySpending: {
-            status: monthlySpendingResponse.status,
-            data:
-              monthlySpendingResponse.status === "fulfilled"
-                ? monthlySpendingResponse.value.data.data
-                : null,
-            error:
-              monthlySpendingResponse.status === "rejected"
-                ? monthlySpendingResponse.reason
-                : null,
-          },
-          netWorth: {
-            status: netWorthResponse.status,
-            data:
-              netWorthResponse.status === "fulfilled"
-                ? netWorthResponse.value.data.data
-                : null,
-            error:
-              netWorthResponse.status === "rejected"
-                ? netWorthResponse.reason
-                : null,
-          },
-          spendingCategories: {
-            status: spendingCategoriesResponse.status,
-            data:
-              spendingCategoriesResponse.status === "fulfilled"
-                ? spendingCategoriesResponse.value.data.data
-                : null,
-            error:
-              spendingCategoriesResponse.status === "rejected"
-                ? spendingCategoriesResponse.reason
-                : null,
-          },
-        });
-
-        // Handle dashboard data
+        // Process dashboard data
         if (dashboardResponse.status === "fulfilled") {
-          console.log(
-            "✅ Setting dashboard data:",
-            dashboardResponse.value.data.data
-          );
+          console.log("✅ Dashboard data:", dashboardResponse.value.data);
           setDashboardData(dashboardResponse.value.data.data);
-        } else {
-          console.error(
-            "❌ Error fetching dashboard:",
-            dashboardResponse.reason
-          );
         }
 
-        // Handle monthly spending
+        // Process monthly spending data
         if (monthlySpendingResponse.status === "fulfilled") {
           console.log(
-            "✅ Setting monthly spending data:",
-            monthlySpendingResponse.value.data.data
+            "✅ Monthly spending data:",
+            monthlySpendingResponse.value.data
           );
           setMonthlySpending(monthlySpendingResponse.value.data.data);
-        } else {
-          console.error(
-            "❌ Error fetching monthly spending:",
-            monthlySpendingResponse.reason
-          );
         }
 
-        // Handle net worth
+        // Process net worth data
         if (netWorthResponse.status === "fulfilled") {
-          console.log(
-            "✅ Setting net worth data:",
-            netWorthResponse.value.data.data
-          );
+          console.log("✅ Net worth data:", netWorthResponse.value.data);
           setNetWorthData(netWorthResponse.value.data.data);
-        } else {
-          console.error(
-            "❌ Error fetching net worth:",
-            netWorthResponse.reason
-          );
         }
 
-        // Handle spending categories
+        // Process spending categories data
         if (spendingCategoriesResponse.status === "fulfilled") {
           console.log(
-            "✅ Setting spending categories data:",
-            spendingCategoriesResponse.value.data.data
+            "✅ Spending categories data:",
+            spendingCategoriesResponse.value.data
           );
           setSpendingCategories(spendingCategoriesResponse.value.data.data);
-        } else {
-          console.error(
-            "❌ Error fetching spending categories:",
-            spendingCategoriesResponse.reason
-          );
         }
 
-        console.log("🎯 Final state after data processing:", {
-          dashboardData,
-          monthlySpending,
-          netWorthData,
-          spendingCategories,
-        });
+        // Initialize filtered data with default 1M period
+        const allData = {
+          expenses:
+            monthlySpendingResponse.status === "fulfilled"
+              ? monthlySpendingResponse.value.data.data || []
+              : [],
+          netWorth:
+            netWorthResponse.status === "fulfilled"
+              ? netWorthResponse.value.data.data || []
+              : [],
+          transactions:
+            dashboardResponse.status === "fulfilled"
+              ? dashboardResponse.value.data.data.transactions || []
+              : [],
+        };
+
+        const filtered = filterDataByTimePeriod(allData, selectedTimePeriod);
+        setFilteredData(filtered);
       } catch (error) {
-        console.error("❌ Unexpected error in fetchData:", error);
+        console.error("❌ Error fetching dashboard data:", error);
         setError("Failed to load dashboard data");
       } finally {
         setLoading(false);
-        console.log("✅ DashboardPage: Data fetch completed");
       }
     };
 
     if (getAllowedCategories().length > 0) {
       fetchData();
     }
-  }, [permissions]);
+  }, [permissions, selectedTimePeriod]);
 
   // Calculate totals from backend data
-  const calculateTotals = () => {
+  const calculateTotals = useMemo(() => {
     if (!dashboardData) {
       return {
         totalAssets: 0,
@@ -199,14 +200,11 @@ const DashboardPage = () => {
       totalAssets: dashboardData.totalAssets || 0,
       totalLiabilities: dashboardData.totalLiabilities || 0,
       totalInvestments: dashboardData.totalInvestments || 0,
-      netWorth:
-        dashboardData.netWorth?.metadata?.currentNetWorth ||
-        dashboardData.totalAssets - dashboardData.totalLiabilities ||
-        0,
+      netWorth: dashboardData.netWorth || 0, // Now a simple number from backend
       monthlyIncome: dashboardData.monthlyIncome || 0,
       monthlyExpenses: dashboardData.monthlyExpenses || 0,
     };
-  };
+  }, [dashboardData]);
 
   const {
     totalAssets,
@@ -215,7 +213,7 @@ const DashboardPage = () => {
     netWorth,
     monthlyIncome,
     monthlyExpenses,
-  } = calculateTotals();
+  } = calculateTotals;
 
   // Get recent transactions from dashboard data
   const recentTransactions =
@@ -279,7 +277,7 @@ const DashboardPage = () => {
               </div>
               <div className="bg-gray-950 p-6 border border-gray-800 shadow-xl hover:shadow-2xl transition-all duration-300">
                 <h3 className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
-                  Income
+                  Saved Income
                 </h3>
                 <p className="text-3xl font-semibold text-white mb-2">
                   ₹{monthlyIncome.toLocaleString()}
@@ -315,55 +313,74 @@ const DashboardPage = () => {
                     Spending Over Time
                   </h3>
                   <div className="flex space-x-2">
-                    <button className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium">
+                    <button
+                      onClick={() => {
+                        setSelectedTimePeriod("1M");
+                      }}
+                      className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium"
+                    >
                       1M
                     </button>
-                    <button className="px-4 py-2 bg-gray-800 text-gray-300 text-sm font-medium hover:bg-gray-700">
+                    <button
+                      onClick={() => {
+                        setSelectedTimePeriod("3M");
+                      }}
+                      className="px-4 py-2 bg-gray-800 text-gray-300 text-sm font-medium hover:bg-gray-700"
+                    >
                       3M
                     </button>
-                    <button className="px-4 py-2 bg-gray-800 text-gray-300 text-sm font-medium hover:bg-gray-700">
+                    <button
+                      onClick={() => {
+                        setSelectedTimePeriod("1Y");
+                      }}
+                      className="px-4 py-2 bg-gray-800 text-gray-300 text-sm font-medium hover:bg-gray-700"
+                    >
                       1Y
                     </button>
                   </div>
                 </div>
                 <p className="text-2xl font-medium text-white mb-4">
-                  ₹{monthlyExpenses.toLocaleString()}
+                  ₹{filteredData?.expenses?.total?.toLocaleString()}
                 </p>
-                {monthlySpending && <ExpenseChart data={monthlySpending} />}
+                {monthlySpending && (
+                  <ExpenseChart
+                    data={monthlySpending}
+                    transactions={dashboardData?.transactions || []}
+                  />
+                )}
               </div>
 
               {/* Spending by Category */}
-              <div className="bg-gray-950 p-6 border border-gray-800 shadow-xl">
-                <h3 className="text-lg font-medium text-white mb-4">
+              <div className="bg-gray-950 border border-gray-800 shadow-xl flex justify-center flex-col items-center">
+                <h3 className="text-lg font-medium text-white mb-8 text-center -mt-5">
                   Spending by Category
                 </h3>
-                <div className="flex items-center justify-center mb-4">
-                  {spendingCategories && (
-                    <InvestmentChart data={spendingCategories} />
-                  )}
-                </div>
-                <div className="space-y-3">
-                  {spendingCategories?.categories?.map((category, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <div
-                          className="w-3 h-3"
-                          style={{ backgroundColor: category.color }}
-                        ></div>
-                        <span className="text-gray-300 text-sm font-medium">
-                          {category.name}
-                        </span>
-                      </div>
-                      <span className="text-gray-400 text-sm">
-                        ₹{category.amount?.toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                {spendingCategories &&
+                spendingCategories.categories &&
+                spendingCategories.categories.length > 0 ? (
+                  <InvestmentChart data={spendingCategories} />
+                ) : (
+                  <div className="h-64 flex items-center justify-center text-gray-400">
+                    No spending data available
+                  </div>
+                )}
               </div>
+            </div>
+          </div>
+
+          {/* Net Worth Chart */}
+          <div className="mb-8">
+            <h2 className="text-xl font-medium text-white mb-6">Net Worth</h2>
+            <div className="bg-gray-950 p-6 border border-gray-800 shadow-xl">
+              {filteredData?.netWorth && (
+                <NetWorthChart
+                  data={filteredData.netWorth}
+                  totalAssets={totalAssets}
+                  totalLiabilities={totalLiabilities}
+                  totalInvestments={totalInvestments}
+                  netWorth={netWorth}
+                />
+              )}
             </div>
           </div>
 
@@ -372,74 +389,91 @@ const DashboardPage = () => {
             <h2 className="text-xl font-medium text-white mb-6">
               Recent Transactions
             </h2>
-            <div className="bg-gray-950 border border-gray-800 overflow-hidden shadow-xl">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-800">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-gray-300 font-medium uppercase tracking-wide text-sm">
-                        Description
-                      </th>
-                      <th className="px-6 py-4 text-left text-gray-300 font-medium uppercase tracking-wide text-sm">
-                        Amount
-                      </th>
-                      <th className="px-6 py-4 text-left text-gray-300 font-medium uppercase tracking-wide text-sm">
-                        Category
-                      </th>
-                      <th className="px-6 py-4 text-left text-gray-300 font-medium uppercase tracking-wide text-sm">
-                        Date
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-700">
-                    {recentTransactions.length > 0 ? (
-                      recentTransactions.map((transaction) => (
-                        <tr
-                          key={transaction.id}
-                          className="hover:bg-gray-800 transition-colors"
-                        >
-                          <td className="px-6 py-4 text-white font-medium">
-                            {transaction.description || transaction.account}
-                          </td>
-                          <td className="px-6 py-4 text-white font-semibold">
-                            ₹
-                            {Math.abs(
-                              transaction.amount || transaction.balance
-                            ).toLocaleString()}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span
-                              className={`px-3 py-1 text-xs font-medium uppercase tracking-wide ${
-                                transaction.type === "income" ||
-                                transaction.type === "Checking"
-                                  ? "bg-emerald-900/50 text-emerald-300 border border-emerald-800"
-                                  : transaction.type === "expense" ||
-                                    transaction.type === "Credit"
-                                  ? "bg-red-900/50 text-red-300 border border-red-800"
-                                  : "bg-blue-900/50 text-blue-300 border border-blue-800"
-                              }`}
-                            >
-                              {transaction.category || transaction.type}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-gray-400 font-normal">
-                            {new Date(transaction.date).toLocaleDateString()}
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
+            <div className="bg-gray-950 border border-gray-800 overflow-hidden shadow-xl rounded-lg">
+              {recentTransactions && recentTransactions.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-800">
                       <tr>
-                        <td
-                          colSpan="4"
-                          className="px-6 py-8 text-center text-gray-400"
-                        >
-                          No recent transactions available
-                        </td>
+                        <th className="px-6 py-4 text-left text-gray-300 font-medium uppercase tracking-wide text-sm">
+                          Description
+                        </th>
+                        <th className="px-6 py-4 text-left text-gray-300 font-medium uppercase tracking-wide text-sm">
+                          Amount
+                        </th>
+                        <th className="px-6 py-4 text-left text-gray-300 font-medium uppercase tracking-wide text-sm">
+                          Category
+                        </th>
+                        <th className="px-6 py-4 text-left text-gray-300 font-medium uppercase tracking-wide text-sm">
+                          Date
+                        </th>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-gray-700">
+                      {recentTransactions
+                        .slice(0, 10)
+                        .map((transaction, index) => (
+                          <tr
+                            key={transaction.id || index}
+                            className="hover:bg-gray-900 transition-colors duration-200"
+                          >
+                            <td className="px-6 py-4 text-white font-medium">
+                              {transaction.description ||
+                                transaction.title ||
+                                "N/A"}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span
+                                className={`font-semibold ${
+                                  transaction.amount >= 0
+                                    ? "text-green-400"
+                                    : "text-red-400"
+                                }`}
+                              >
+                                {transaction.amount >= 0 ? "+" : ""}₹
+                                {Math.abs(transaction.amount).toLocaleString()}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-700 text-gray-300">
+                                {transaction.category || "Other"}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-gray-400 text-sm">
+                              {transaction.date
+                                ? new Date(
+                                    transaction.date
+                                  ).toLocaleDateString()
+                                : "N/A"}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="h-64 flex flex-col items-center justify-center text-gray-400">
+                  <svg
+                    className="w-12 h-12 mb-4 text-gray-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                    />
+                  </svg>
+                  <p className="text-lg font-medium mb-2">
+                    No transactions found
+                  </p>
+                  <p className="text-sm text-center">
+                    Start adding transactions to see them here
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

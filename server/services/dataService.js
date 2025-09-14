@@ -16,6 +16,7 @@ class DataService {
       transactions: Transaction,
       epf: EPF,
       "credit-score": CreditScore,
+      creditScore: CreditScore, // Support both naming conventions
       investments: Investment,
     };
     return modelMap[category];
@@ -24,15 +25,40 @@ class DataService {
   // Load data for a specific user and category from MongoDB
   static async loadData(category, userId) {
     try {
+      console.log(
+        `🔍 DataService.loadData called for category: ${category}, userId: ${userId}`
+      );
+
       const Model = this.getModelByCategory(category);
       if (!Model) {
+        console.error(`❌ Invalid category: ${category}`);
         throw new Error(`Invalid category: ${category}`);
       }
 
-      const data = await Model.findOne({ user_id: userId });
+      console.log(
+        `🔎 Querying MongoDB with filter: { clerkId: "${userId}" } for model: ${Model.modelName}`
+      );
+      const data = await Model.findOne({ clerkId: userId });
+
+      if (data) {
+        console.log(`✅ Found data for ${category}:`, {
+          hasData: true,
+          dataKeys: Object.keys(data.toObject()),
+          sampleData:
+            category === "transactions"
+              ? `${data.transactions?.length || 0} transactions`
+              : `${JSON.stringify(data).substring(0, 100)}...`,
+        });
+      } else {
+        console.log(`⚠️ No data found for ${category} with clerkId: ${userId}`);
+      }
+
       return data || null;
     } catch (error) {
-      console.error(`Error loading ${category} data:`, error);
+      console.error(
+        `❌ Error loading ${category} data for userId ${userId}:`,
+        error
+      );
       throw error;
     }
   }
@@ -40,44 +66,67 @@ class DataService {
   // Load data for allowed categories
   static async loadAllowedData(userId, allowedCategories) {
     try {
+      console.log(
+        `🔍 DataService.loadAllowedData called for userId: ${userId}`
+      );
+      console.log(`📋 Allowed categories: [${allowedCategories.join(", ")}]`);
+
       const result = {};
 
       for (const category of allowedCategories) {
+        console.log(`🔄 Processing category: ${category}`);
         const data = await this.loadData(category, userId);
         if (data) {
           result[category] = data;
+          console.log(`✅ Added ${category} data to result`);
+        } else {
+          console.log(`⚠️ No data found for category: ${category}`);
         }
       }
 
+      console.log(`📊 Final result summary:`, {
+        totalCategories: allowedCategories.length,
+        categoriesWithData: Object.keys(result).length,
+        categoriesWithData_list: Object.keys(result),
+        categoriesWithoutData: allowedCategories.filter((cat) => !result[cat]),
+      });
+
       return result;
     } catch (error) {
-      console.error("Error loading allowed data:", error);
+      console.error(
+        `❌ Error loading allowed data for userId ${userId}:`,
+        error
+      );
       throw error;
     }
   }
 
-  // Get user-specific data for a category
-  static async getUserData(category, clerkId) {
+  // Get user data for a specific category (public interface)
+  static async getUserData(category, userId) {
     try {
       console.log(
-        `🔍 DataService.getUserData called for category: ${category}, user: ${clerkId}`
+        `📊 DataService.getUserData called for category: ${category}, userId: ${userId}`
       );
-      const Model = this.getModelByCategory(category);
-      if (!Model) {
-        throw new Error(`Invalid category: ${category}`);
+
+      const data = await this.loadData(category, userId);
+
+      if (!data) {
+        console.log(`❌ No data found for category: ${category}`);
+        return [];
       }
 
-      const data = await Model.find({ clerkId: clerkId });
-      console.log(
-        `📊 MongoDB query result for ${category} (user: ${clerkId}):`,
-        {
-          count: data.length,
-          sample: data.length > 0 ? data[0] : null,
-        }
-      );
+      // For transactions, return the transactions array directly
+      if (category === "transactions") {
+        return data.transactions || [];
+      }
+
+      // For other categories, return the data as is
       return data;
     } catch (error) {
-      console.error(`❌ Error getting user ${category} data:`, error);
+      console.error(
+        `❌ Error in DataService.getUserData for category ${category}:`,
+        error
+      );
       throw error;
     }
   }
@@ -103,12 +152,95 @@ class DataService {
     }
   }
 
+  // Load all user data from all categories
+  static async loadAllUserData(userId) {
+    console.log(`📋 DataService.loadAllUserData called for userId: ${userId}`);
+
+    const categories = [
+      "assets",
+      "liabilities",
+      "transactions",
+      "epf",
+      "creditScore",
+      "investments",
+    ];
+
+    const result = {};
+    const categoriesWithData = [];
+    const categoriesWithoutData = [];
+    const deniedCategories = [];
+
+    console.log(`🔄 Processing ${categories.length} categories...`);
+
+    for (const category of categories) {
+      try {
+        console.log(`🔄 Processing category: ${category}`);
+
+        // Check permissions first
+        const hasPermission = await this.hasPermission(userId, category);
+        if (!hasPermission) {
+          console.log(`🔐 Permission denied for category: ${category}`);
+          deniedCategories.push(category);
+          continue;
+        }
+
+        const data = await this.loadData(category, userId, true); // Skip permission check since we already checked
+
+        if (data) {
+          result[category] = data;
+          categoriesWithData.push(category);
+          console.log(`✅ Added ${category} data to result`);
+        } else {
+          categoriesWithoutData.push(category);
+          console.log(`❌ No data found for ${category}`);
+        }
+      } catch (error) {
+        console.error(`❌ Error loading ${category}:`, error);
+        categoriesWithoutData.push(category);
+      }
+    }
+
+    console.log(`📊 Final result summary:`, {
+      totalCategories: categories.length,
+      categoriesWithData: categoriesWithData.length,
+      categoriesWithData_list: categoriesWithData,
+      categoriesWithoutData: categoriesWithoutData,
+      deniedCategories: deniedCategories,
+    });
+
+    console.log(`📋 Data loading complete:`, {
+      hasData: Object.keys(result).length > 0,
+      categoriesFound: Object.keys(result),
+      totalCategories: Object.keys(result).length,
+      deniedCategories: deniedCategories,
+    });
+
+    return {
+      data: result,
+      permissions: {
+        allowed: categoriesWithData,
+        denied: deniedCategories,
+        noData: categoriesWithoutData,
+      },
+    };
+  }
+
   // Specific data access methods for DashboardAnalytics
   static async getAssets(clerkId) {
     console.log("🏦 DataService.getAssets called");
     const data = await this.getUserData("assets", clerkId);
+
+    // Handle case where data might be a single document or null
+    if (!data) {
+      console.log("⚠️ No assets data found");
+      return [];
+    }
+
+    // Convert single document to array for processing
+    const assetsArray = Array.isArray(data) ? data : [data];
+
     const processedAssets = [
-      ...data.flatMap(
+      ...assetsArray.flatMap(
         (doc) =>
           doc.bank_accounts?.map((acc) => ({
             currentValue: acc.balance, // Fix: use 'balance' from JSON
@@ -116,14 +248,14 @@ class DataService {
             name: acc.bank_name,
           })) || []
       ),
-      ...data.flatMap(
+      ...assetsArray.flatMap(
         (doc) =>
           doc.real_estate?.map((re) => ({
             currentValue: re.current_value, // This is correct
             type: re.type,
           })) || []
       ),
-      ...data.flatMap(
+      ...assetsArray.flatMap(
         (doc) =>
           doc.vehicles?.map((v) => ({
             currentValue: v.current_value, // This is correct
@@ -170,7 +302,7 @@ class DataService {
   static async getTransactions(clerkId) {
     console.log("💸 DataService.getTransactions called");
     const data = await this.getUserData("transactions", clerkId);
-    const processedTransactions = data.flatMap((doc) => doc.transactions || []);
+    const processedTransactions = data;
 
     console.log(`📋 Processed transactions:`, {
       totalTransactions: processedTransactions.length,
@@ -214,7 +346,17 @@ class DataService {
   static async getInvestments(clerkId) {
     console.log("📈 DataService.getInvestments called");
     const data = await this.getUserData("investments", clerkId);
-    const processedInvestments = data.flatMap((doc) => [
+
+    // Handle case where data might be a single document or null
+    if (!data) {
+      console.log("⚠️ No investments data found");
+      return [];
+    }
+
+    // Convert single document to array for processing
+    const investmentsArray = Array.isArray(data) ? data : [data];
+
+    const processedInvestments = investmentsArray.flatMap((doc) => [
       ...(doc.portfolio?.stocks?.map((stock) => ({
         type: "stock",
         symbol: stock.symbol,

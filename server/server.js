@@ -2,14 +2,25 @@ import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import cors from "cors";
+import multer from "multer"; // Import multer
 
 // Import routes
 import indexRouter from "./routes/index.js";
 import webhookRouter from "./routes/webhook.js";
+import financialRoutes from "./routes/financial.js";
+import budgetRoutes from "./routes/budget.js";
+import accountRoutes from "./routes/account.js";
+import transactionRoutes from "./routes/transaction.js";
+import investmentRoutes from "./routes/investment.js";
+import queryRoutes from "./routes/query.js";
+import dashboardRoutes from "./routes/dashboard.js";
+import analyticsRoutes from "./routes/analytics.js";
+import permissionRoutes from "./routes/permissions.js";
+import dataRoutes from "./routes/data.js";
 
 // Import middleware
 import { errorHandler } from "./middleware/errorHandler.js";
-import { withAuth, attachUser } from "./middleware/clerkAuth.js";
+import { withAuth, attachUser, requireAuth } from "./middleware/clerkAuth.js";
 
 // Load environment variables
 dotenv.config();
@@ -35,6 +46,9 @@ const corsOptions = {
     "Origin",
     "X-Requested-With",
   ],
+  exposedHeaders: ["Authorization"],
+  preflightContinue: false,
+  optionsSuccessStatus: 200,
 };
 
 // Middleware
@@ -64,9 +78,25 @@ mongoose
   .then(() => console.log("Connected to MongoDB"))
   .catch((error) => console.error("MongoDB connection error:", error));
 
+// Create multer instance
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+});
+
 // Routes
-app.use("/api", indexRouter);
-app.use("/api/webhooks", webhookRouter);
+app.use("/", indexRouter);
+app.use("/api/accounts", requireAuth, accountRoutes);
+app.use("/api/budgets", requireAuth, budgetRoutes);
+app.use("/api/investments", requireAuth, investmentRoutes);
+app.use("/api/transactions", requireAuth, transactionRoutes);
+app.use("/api/dashboard", requireAuth, dashboardRoutes);
+app.use("/api/analytics", requireAuth, analyticsRoutes);
+app.use("/api/permissions", requireAuth, permissionRoutes);
+app.use("/api/query", requireAuth, upload.any(), queryRoutes);
+app.use("/api/data", requireAuth, dataRoutes);
 
 // Error handling middleware
 app.use(errorHandler);
@@ -77,7 +107,7 @@ app.use("*", (req, res) => {
 });
 
 // Start server
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });

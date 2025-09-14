@@ -8,23 +8,33 @@ const router = express.Router();
 // Apply authentication middleware to all data routes
 router.use(ensureAuth);
 
-// Generic route handler for all data categories
+// Generic handler for data requests (now with permission checking)
 const handleDataRequest = (category) => {
   return handleAsync(async (req, res) => {
     const clerkId = req.auth.userId;
-    const data = await DataService.getUserData(category, clerkId);
+
+    const data = await DataService.loadData(category, clerkId);
+
+    if (data === null) {
+      return res.status(403).json({
+        status: "error",
+        message: `Access denied for ${category} data`,
+        category,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     res.json({
       status: "success",
       data,
       category,
-      count: data.length,
+      count: Array.isArray(data) ? data.length : 1,
       timestamp: new Date().toISOString(),
     });
   });
 };
 
-// Data category routes
+// Route definitions for each data category
 router.get("/assets", handleDataRequest("assets"));
 router.get("/liabilities", handleDataRequest("liabilities"));
 router.get("/transactions", handleDataRequest("transactions"));
@@ -32,38 +42,34 @@ router.get("/epf", handleDataRequest("epf"));
 router.get("/credit-score", handleDataRequest("creditScore"));
 router.get("/investments", handleDataRequest("investments"));
 
-// Bulk data endpoint
+// Bulk data endpoint (now with permission checking)
 router.get(
   "/bulk",
   handleAsync(async (req, res) => {
     const clerkId = req.auth.userId;
     const categories = req.query.categories
       ? req.query.categories.split(",")
-      : [];
+      : ["assets", "liabilities", "transactions"];
 
-    if (categories.length === 0) {
-      return res.status(400).json({
-        error: "No categories specified",
-        message:
-          "Please provide categories as a comma-separated query parameter",
-      });
-    }
-
-    const results = {};
-    for (const category of categories) {
-      try {
-        results[category] = await DataService.getUserData(category, clerkId);
-      } catch (error) {
-        results[category] = { error: error.message };
-      }
-    }
+    const result = await DataService.loadAllUserData(clerkId);
 
     res.json({
       status: "success",
-      data: results,
+      data: result.data,
+      permissions: result.permissions,
+      categories,
       timestamp: new Date().toISOString(),
     });
   })
 );
+
+// Health check endpoint
+router.get("/health", (req, res) => {
+  res.json({
+    status: "success",
+    message: "Data service is healthy",
+    timestamp: new Date().toISOString(),
+  });
+});
 
 export default router;

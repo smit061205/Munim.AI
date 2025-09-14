@@ -1,10 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useAuth } from "@clerk/clerk-react";
-import {
-  createAuthenticatedApi,
-  fetchPermissions,
-  updatePermissions,
-} from "../services/api";
 
 const PermissionsContext = createContext();
 
@@ -17,7 +12,7 @@ export const usePermissions = () => {
 };
 
 export const PermissionsProvider = ({ children }) => {
-  const { getToken, isSignedIn } = useAuth();
+  const { isSignedIn, isLoaded, session } = useAuth();
   const [permissions, setPermissions] = useState({
     assets: true,
     liabilities: true,
@@ -31,17 +26,27 @@ export const PermissionsProvider = ({ children }) => {
 
   // Load permissions from backend
   const loadPermissions = async () => {
-    if (!isSignedIn) return;
+    if (!isSignedIn || !isLoaded || !session) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      const authApi = createAuthenticatedApi(getToken);
-      const response = await fetchPermissions(authApi);
+      const token = await session.getToken();
+      const response = await fetch("http://localhost:5001/api/permissions", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
 
-      if (response.data?.allowedCategories) {
-        setPermissions(response.data.allowedCategories);
+      if (!response.ok) {
+        throw new Error("Failed to fetch permissions");
+      }
+
+      const data = await response.json();
+      if (data.permissions) {
+        setPermissions(data.permissions);
       }
     } catch (err) {
       console.error("Error loading permissions:", err);
@@ -54,14 +59,26 @@ export const PermissionsProvider = ({ children }) => {
 
   // Save permissions to backend
   const savePermissions = async (newPermissions) => {
-    if (!isSignedIn) return;
+    if (!isSignedIn || !isLoaded || !session) return;
 
     try {
-      const authApi = createAuthenticatedApi(getToken);
-      const response = await updatePermissions(authApi, newPermissions);
+      const token = await session.getToken();
+      const response = await fetch("http://localhost:5001/api/permissions", {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ permissions: newPermissions }),
+      });
 
-      if (response.data?.allowedCategories) {
-        setPermissions(response.data.allowedCategories);
+      if (!response.ok) {
+        throw new Error("Failed to update permissions");
+      }
+
+      const data = await response.json();
+      if (data.permissions) {
+        setPermissions(data.permissions);
       }
     } catch (err) {
       console.error("Error saving permissions:", err);
@@ -95,10 +112,10 @@ export const PermissionsProvider = ({ children }) => {
 
   // Load permissions on mount and when user signs in
   useEffect(() => {
-    if (isSignedIn) {
+    if (isSignedIn && isLoaded && session) {
       loadPermissions();
     }
-  }, [isSignedIn]);
+  }, [isSignedIn, isLoaded, session]);
 
   return (
     <PermissionsContext.Provider

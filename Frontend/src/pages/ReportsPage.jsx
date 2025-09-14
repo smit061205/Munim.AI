@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useUser } from "@clerk/clerk-react";
+import { useUser, useAuth } from "@clerk/clerk-react";
 import { usePermissions } from "../context/PermissionsContext";
 import { useAIChat } from "../context/AIChatContext";
 import { motion, AnimatePresence } from "framer-motion";
@@ -9,7 +9,8 @@ import Sidebar from "../components/Sidebar";
 import AIChatSidebar from "../components/AIChatSidebar";
 
 const ReportsPage = () => {
-  const { user, getToken } = useUser();
+  const { user } = useUser();
+  const { getToken, isLoaded, isSignedIn } = useAuth();
   const { permissions } = usePermissions();
   const {
     isAIChatOpen,
@@ -21,110 +22,177 @@ const ReportsPage = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [creditScoreData, setCreditScoreData] = useState(null);
 
   useEffect(() => {
     const fetchReportData = async () => {
-      if (!permissions || Object.keys(permissions).length === 0 || !getToken)
+      console.log("🔍 ReportsPage: Starting fetchReportData");
+      console.log("🔍 Clerk isLoaded:", isLoaded);
+      console.log("🔍 Clerk isSignedIn:", isSignedIn);
+      console.log("🔍 Permissions:", permissions);
+
+      if (
+        !isLoaded ||
+        !isSignedIn ||
+        !permissions ||
+        Object.keys(permissions).length === 0
+      ) {
+        console.log("❌ Missing requirements for data fetch");
         return;
+      }
 
       setLoading(true);
       try {
-        const authApi = createAuthenticatedApi(getToken);
+        console.log("🌐 Creating authenticated API...");
+        const token = await getToken();
+        console.log("🔑 Token obtained:", !!token);
 
-        // Fetch data based on selected period
-        const [dashboardResponse, transactionsResponse] =
-          await Promise.allSettled([
-            authApi.get("/dashboard"),
-            authApi.get("/data/transactions"),
-          ]);
-
-        if (
-          dashboardResponse.status === "fulfilled" &&
-          transactionsResponse.status === "fulfilled"
-        ) {
-          const dashboardData = dashboardResponse.value.data.data;
-          const transactions = transactionsResponse.value.data.flatMap(
-            (doc) => doc.transactions || []
-          );
-
-          // Process transactions for the selected period
-          const processedData = processReportData(
-            transactions,
-            selectedPeriod,
-            dashboardData
-          );
-          setReportData(processedData);
+        if (!token) {
+          console.log("❌ Unable to get authentication token");
+          return;
         }
+
+        const authApi = createAuthenticatedApi(() => Promise.resolve(token));
+
+        // Get allowed categories based on permissions
+        const allowedCategories = [];
+        if (permissions.transactions) allowedCategories.push("transactions");
+        if (permissions.assets) allowedCategories.push("assets");
+        if (permissions.liabilities) allowedCategories.push("liabilities");
+        if (permissions.investments) allowedCategories.push("investments");
+
+        console.log("📋 Allowed categories:", allowedCategories);
+
+        // Fetch data from dashboard API with proper categories
+        console.log("📡 Making API requests...");
+        const [
+          dashboardResponse,
+          monthlySpendingResponse,
+          spendingCategoriesResponse,
+          creditScoreResponse,
+        ] = await Promise.allSettled([
+          authApi.get(`/dashboard?categories=${allowedCategories.join(",")}`),
+          authApi.get(
+            `/dashboard/monthly-spending?categories=${allowedCategories.join(
+              ","
+            )}`
+          ),
+          authApi.get(
+            `/dashboard/spending-categories?categories=${allowedCategories.join(
+              ","
+            )}`
+          ),
+          authApi.get("/data/credit-score"),
+        ]);
+
+        console.log("📊 Dashboard response:", dashboardResponse);
+        console.log("📊 Monthly spending response:", monthlySpendingResponse);
+        console.log(
+          "📊 Spending categories response:",
+          spendingCategoriesResponse
+        );
+        console.log("📊 Credit score response:", creditScoreResponse);
+
+        let processedData = {
+          income: 0,
+          expenses: 0,
+          savings: 0,
+          investments: 0,
+          categories: [],
+        };
+
+        if (dashboardResponse.status === "fulfilled") {
+          console.log("✅ Dashboard data:", dashboardResponse.value.data);
+          const dashboardData = dashboardResponse.value.data.data;
+          processedData.investments = dashboardData.totalInvestments || 0;
+          processedData.income = dashboardData.monthlyIncome || 0;
+          processedData.expenses = dashboardData.monthlyExpenses || 0;
+          processedData.savings = processedData.income - processedData.expenses;
+        } else {
+          console.log("❌ Dashboard request failed:", dashboardResponse.reason);
+        }
+
+        if (spendingCategoriesResponse.status === "fulfilled") {
+          console.log(
+            "✅ Categories data:",
+            spendingCategoriesResponse.value.data
+          );
+          const categoriesData = spendingCategoriesResponse.value.data.data;
+          if (
+            categoriesData.categories &&
+            Array.isArray(categoriesData.categories)
+          ) {
+            processedData.categories = categoriesData.categories
+              .map((cat) => ({
+                name: cat.name,
+                amount: cat.amount,
+                percentage:
+                  categoriesData.totalSpending > 0
+                    ? (cat.amount / categoriesData.totalSpending) * 100
+                    : 0,
+              }))
+              .sort((a, b) => b.amount - a.amount);
+          }
+        } else {
+          console.log(
+            "❌ Categories request failed:",
+            spendingCategoriesResponse.reason
+          );
+        }
+
+        // Process credit score data
+        if (creditScoreResponse.status === "fulfilled") {
+          console.log("✅ Credit score data:", creditScoreResponse.value.data);
+          const creditData = creditScoreResponse.value.data.data;
+          const mappedCreditData = {
+            score: creditData.credit_score || 0,
+            utilization: creditData.credit_utilization || 0,
+            paymentHistory: creditData.payment_history || "N/A",
+            range:
+              creditData.credit_score >= 800
+                ? "Excellent"
+                : creditData.credit_score >= 740
+                ? "Very Good"
+                : creditData.credit_score >= 670
+                ? "Good"
+                : creditData.credit_score >= 580
+                ? "Fair"
+                : "Poor",
+            creditAge: creditData.credit_age || 24, // Default to 24 months if not provided
+          };
+          console.log("🎯 Mapped credit score data:", mappedCreditData);
+          setCreditScoreData(mappedCreditData);
+        } else {
+          console.log(
+            "❌ Credit score request failed:",
+            creditScoreResponse.reason
+          );
+        }
+
+        console.log("📈 Final processed data:", processedData);
+        setReportData(processedData);
       } catch (error) {
-        console.error("Error fetching report data:", error);
+        console.error("❌ Error fetching report data:", error);
+        console.error("❌ Error details:", {
+          message: error.message,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+        });
+        setReportData({
+          income: 0,
+          expenses: 0,
+          savings: 0,
+          investments: 0,
+          categories: [],
+        });
       } finally {
         setLoading(false);
       }
     };
 
     fetchReportData();
-  }, [permissions, selectedPeriod, getToken]);
-
-  const processReportData = (transactions, period, dashboardData) => {
-    // Calculate date range based on period
-    const now = new Date();
-    let startDate;
-
-    switch (period) {
-      case "monthly":
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        break;
-      case "quarterly":
-        startDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-        break;
-      case "yearly":
-        startDate = new Date(now.getFullYear(), 0, 1);
-        break;
-      default:
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-    }
-
-    // Filter transactions for the period
-    const periodTransactions = transactions.filter((t) => {
-      const transactionDate = new Date(t.date);
-      return transactionDate >= startDate;
-    });
-
-    // Calculate income and expenses
-    const income = periodTransactions
-      .filter((t) => t.amount > 0)
-      .reduce((sum, t) => sum + t.amount, 0);
-
-    const expenses = periodTransactions
-      .filter((t) => t.amount < 0)
-      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
-
-    // Calculate category breakdown
-    const categoryMap = {};
-    periodTransactions
-      .filter((t) => t.amount < 0)
-      .forEach((t) => {
-        const category = t.category || "Other";
-        categoryMap[category] =
-          (categoryMap[category] || 0) + Math.abs(t.amount);
-      });
-
-    const categories = Object.entries(categoryMap)
-      .map(([name, amount]) => ({
-        name,
-        amount,
-        percentage: expenses > 0 ? (amount / expenses) * 100 : 0,
-      }))
-      .sort((a, b) => b.amount - a.amount);
-
-    return {
-      income,
-      expenses,
-      savings: income - expenses,
-      investments: dashboardData?.totalAssets || 0,
-      categories,
-    };
-  };
+  }, [permissions, selectedPeriod, isLoaded, isSignedIn]);
 
   const currentData = reportData || {
     income: 0,
@@ -139,7 +207,24 @@ const ReportsPage = () => {
       : 0;
 
   const handleGenerateReport = () => {
-    alert("Report generated successfully! Check your downloads folder.");
+    // TODO: Implement actual PDF generation with jsPDF or similar library
+    const reportName = `Financial_Report_${selectedPeriod}_${new Date()
+      .toISOString()
+      .slice(0, 10)}.pdf`;
+
+    // Show loading state and success message
+    const button = document.querySelector("[data-generate-pdf]");
+    const originalText = button.textContent;
+    button.textContent = "Generating...";
+    button.disabled = true;
+
+    setTimeout(() => {
+      button.textContent = originalText;
+      button.disabled = false;
+      alert(
+        `Report "${reportName}" generated successfully! Check your downloads folder.`
+      );
+    }, 2000);
   };
 
   const handleAIToggle = () => {
@@ -192,6 +277,7 @@ const ReportsPage = () => {
                     <option value="yearly">Yearly</option>
                   </select>
                   <button
+                    data-generate-pdf
                     onClick={handleGenerateReport}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 font-medium transition-colors"
                   >
@@ -271,69 +357,40 @@ const ReportsPage = () => {
             </div>
           </div>
 
-          {/* Expense Breakdown */}
+          {/* Credit Score */}
           <div className="mb-8">
             <div className="bg-gray-950 border border-gray-800 shadow-xl">
               <div className="px-6 py-4 border-b border-gray-800">
-                <h3 className="text-lg font-medium text-white">
-                  Expense Breakdown by Category
-                </h3>
+                <h3 className="text-lg font-medium text-white">Credit Score</h3>
               </div>
               <div className="p-6">
+                <div className="text-center mb-6">
+                  <div className="text-6xl font-bold text-emerald-400 mb-2">
+                    {creditScoreData && creditScoreData.score}
+                  </div>
+                  <p className="text-gray-400">
+                    {creditScoreData && creditScoreData.range}
+                  </p>
+                </div>
                 <div className="space-y-4">
-                  {currentData.categories.map((category, index) => (
-                    <div
-                      key={category.name}
-                      className="flex items-center justify-between"
-                    >
-                      <div className="flex items-center space-x-4 flex-1">
-                        <div
-                          className={`w-4 h-4 ${
-                            index === 0
-                              ? "bg-red-500"
-                              : index === 1
-                              ? "bg-blue-500"
-                              : index === 2
-                              ? "bg-green-500"
-                              : index === 3
-                              ? "bg-yellow-500"
-                              : index === 4
-                              ? "bg-purple-500"
-                              : "bg-gray-500"
-                          }`}
-                        ></div>
-                        <span className="text-white font-medium min-w-0 flex-1">
-                          {category.name}
-                        </span>
-                        <div className="w-full max-w-xs bg-gray-700 h-2">
-                          <div
-                            className={`h-2 ${
-                              index === 0
-                                ? "bg-red-500"
-                                : index === 1
-                                ? "bg-blue-500"
-                                : index === 2
-                                ? "bg-green-500"
-                                : index === 3
-                                ? "bg-yellow-500"
-                                : index === 4
-                                ? "bg-purple-500"
-                                : "bg-gray-500"
-                            }`}
-                            style={{ width: `${category.percentage}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                      <div className="text-right ml-4">
-                        <p className="text-white font-semibold">
-                          ₹{category.amount.toLocaleString()}
-                        </p>
-                        <p className="text-gray-400 text-sm">
-                          {category.percentage.toFixed(1)}%
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-300">Credit Utilization</span>
+                    <span className="text-emerald-400 font-medium">
+                      {creditScoreData && creditScoreData.utilization}%
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-300">Payment History</span>
+                    <span className="text-yellow-400 font-medium">
+                      {creditScoreData && creditScoreData.paymentHistory}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-300">Credit Age</span>
+                    <span className="text-emerald-400 font-medium">
+                      {creditScoreData && creditScoreData.creditAge} months
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>

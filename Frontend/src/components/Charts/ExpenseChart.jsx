@@ -8,6 +8,7 @@ import {
   Title,
   Tooltip,
   Legend,
+  Filler,
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 
@@ -18,7 +19,8 @@ ChartJS.register(
   LineElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  Filler
 );
 
 const ExpenseChart = ({ data = null, transactions = [] }) => {
@@ -82,6 +84,15 @@ const ExpenseChart = ({ data = null, transactions = [] }) => {
         backgroundColor: "rgba(239, 68, 68, 0.1)",
         tension: 0.4,
         fill: true,
+        borderWidth: 3,
+        pointBackgroundColor: "rgb(239, 68, 68)",
+        pointBorderColor: "#ffffff",
+        pointBorderWidth: 2,
+        pointRadius: 6,
+        pointHoverRadius: 8,
+        pointHoverBackgroundColor: "rgb(239, 68, 68)",
+        pointHoverBorderColor: "#ffffff",
+        pointHoverBorderWidth: 3,
       },
     ],
   };
@@ -95,12 +106,29 @@ const ExpenseChart = ({ data = null, transactions = [] }) => {
         labels: {
           color: "#d1d5db",
           font: {
-            size: 12,
+            size: 14,
+            weight: "500",
           },
+          usePointStyle: true,
+          padding: 20,
         },
       },
       title: {
         display: false,
+      },
+      tooltip: {
+        backgroundColor: "rgba(0, 0, 0, 0.9)",
+        titleColor: "#ffffff",
+        bodyColor: "#ffffff",
+        borderColor: "#374151",
+        borderWidth: 1,
+        cornerRadius: 8,
+        displayColors: false,
+        callbacks: {
+          label: function (context) {
+            return `Expenses: ₹${context.parsed.y.toLocaleString()}`;
+          },
+        },
       },
     },
     scales: {
@@ -109,14 +137,14 @@ const ExpenseChart = ({ data = null, transactions = [] }) => {
         ticks: {
           color: "#9ca3af",
           font: {
-            size: 11,
+            size: 12,
           },
           callback: function (value) {
-            return "₹" + value.toLocaleString();
+            return (value / 1000).toFixed(0) + "K";
           },
         },
         grid: {
-          color: "#374151",
+          color: "rgba(55, 65, 81, 0.5)",
           drawBorder: false,
         },
       },
@@ -124,11 +152,11 @@ const ExpenseChart = ({ data = null, transactions = [] }) => {
         ticks: {
           color: "#9ca3af",
           font: {
-            size: 11,
+            size: 12,
           },
         },
         grid: {
-          color: "#374151",
+          color: "rgba(55, 65, 81, 0.3)",
           drawBorder: false,
         },
       },
@@ -136,6 +164,11 @@ const ExpenseChart = ({ data = null, transactions = [] }) => {
     interaction: {
       intersect: false,
       mode: "index",
+    },
+    elements: {
+      line: {
+        tension: 0.4,
+      },
     },
   };
 

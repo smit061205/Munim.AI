@@ -57,6 +57,17 @@ export const fetchEPF = (authApi) => authApi.get("/data/epf");
 export const fetchCreditScore = (authApi) => authApi.get("/data/credit-score");
 export const fetchInvestments = (authApi) => authApi.get("/data/investments");
 
+// Budget endpoints
+export const fetchBudgets = (authApi) => authApi.get("/budgets");
+export const createBudget = (authApi, budgetData) =>
+  authApi.post("/budgets", budgetData);
+export const updateBudget = (authApi, budgetId, budgetData) =>
+  authApi.put(`/budgets/${budgetId}`, budgetData);
+export const deleteBudget = (authApi, budgetId) =>
+  authApi.delete(`/budgets/${budgetId}`);
+export const updateBudgetSpending = (authApi, spendingData) =>
+  authApi.put("/budgets/update-spending", spendingData);
+
 // Dashboard analytics endpoints
 export const fetchDashboard = async (authApi, categories = []) => {
   console.log(
@@ -194,8 +205,30 @@ export const updatePermissions = (authApi, categories) =>
   authApi.post("/permissions", { categories });
 
 // AI Query endpoint
-export const sendQuery = (authApi, question, allowedCategories) =>
-  authApi.post("/query", { question, allowedCategories });
+export const sendQuery = (authApi, question, allowedCategories, files = []) => {
+  // Validate inputs
+  if (!question || question.trim() === "") {
+    throw new Error("Question cannot be empty");
+  }
+
+  // Create FormData for file uploads
+  const formData = new FormData();
+  formData.append("question", question.trim());
+  formData.append("allowedCategories", JSON.stringify(allowedCategories || []));
+
+  // Add files to FormData
+  files.forEach((fileObj, index) => {
+    if (fileObj.file) {
+      formData.append(`files`, fileObj.file);
+    }
+  });
+
+  return authApi.post("/query", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+};
 
 // Helper function to fetch all allowed data
 export const fetchAllowedData = async (authApi, allowedCategories) => {
@@ -265,6 +298,62 @@ export const fetchAllowedData = async (authApi, allowedCategories) => {
 
   await Promise.allSettled(promises);
   return data;
+};
+
+// Account API functions (require authentication)
+export const getAccounts = (authApi) => {
+  return authApi.get("/account");
+};
+
+export const createAccount = (authApi, accountData) => {
+  return authApi.post("/account", accountData);
+};
+
+export const updateAccount = (authApi, accountId, accountData) => {
+  return authApi.put(`/account/${accountId}`, accountData);
+};
+
+export const deleteAccount = (authApi, accountId) => {
+  return authApi.delete(`/account/${accountId}`);
+};
+
+// Transaction API functions (require authentication)
+export const getTransactions = (authApi) => {
+  return authApi.get("/transaction");
+};
+
+export const createTransaction = (authApi, transactionData) => {
+  return authApi.post("/transaction", transactionData);
+};
+
+export const updateTransaction = (authApi, transactionId, transactionData) => {
+  return authApi.put(`/transaction/${transactionId}`, transactionData);
+};
+
+export const deleteTransaction = (authApi, transactionId) => {
+  return authApi.delete(`/transaction/${transactionId}`);
+};
+
+// Investment API functions (require authentication)
+export const getInvestments = (authApi) => {
+  return authApi.get("/investment");
+};
+
+export const createInvestment = (authApi, investmentData) => {
+  return authApi.post("/investment", investmentData);
+};
+
+export const updateInvestment = (
+  authApi,
+  type,
+  investmentId,
+  investmentData
+) => {
+  return authApi.put(`/investment/${type}/${investmentId}`, investmentData);
+};
+
+export const deleteInvestment = (authApi, type, investmentId) => {
+  return authApi.delete(`/investment/${type}/${investmentId}`);
 };
 
 export default api;

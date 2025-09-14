@@ -170,6 +170,39 @@ const investmentSchema = new mongoose.Schema({
   updated_at: { type: Date, default: Date.now },
 });
 
+// Budget Item Schema
+const budgetItemSchema = new mongoose.Schema({
+  id: String,
+  category: { type: String, required: true },
+  budgetAmount: { type: Number, required: true, default: 0 },
+  spentAmount: { type: Number, default: 0 },
+  period: {
+    type: String,
+    enum: ["weekly", "monthly", "quarterly", "yearly"],
+    default: "monthly",
+  },
+  startDate: { type: Date, required: true },
+  endDate: { type: Date, required: true },
+  status: {
+    type: String,
+    enum: ["under-budget", "on-track", "over-budget"],
+    default: "on-track",
+  },
+  isActive: { type: Boolean, default: true },
+  created_at: { type: Date, default: Date.now },
+});
+
+// Budget Schema
+const budgetSchema = new mongoose.Schema({
+  user_id: { type: String, required: true },
+  clerkId: { type: String, required: true },
+  budgets: [budgetItemSchema],
+  totalBudget: { type: Number, default: 0 },
+  totalSpent: { type: Number, default: 0 },
+  created_at: { type: Date, default: Date.now },
+  updated_at: { type: Date, default: Date.now },
+});
+
 // Add pre-save middleware to update timestamps
 assetSchema.pre("save", function (next) {
   this.updated_at = Date.now();
@@ -201,6 +234,11 @@ investmentSchema.pre("save", function (next) {
   next();
 });
 
+budgetSchema.pre("save", function (next) {
+  this.updated_at = Date.now();
+  next();
+});
+
 // Create models
 const Asset = mongoose.model("Asset", assetSchema);
 const Liability = mongoose.model("Liability", liabilitySchema);
@@ -208,5 +246,6 @@ const Transaction = mongoose.model("Transaction", transactionSchema);
 const EPF = mongoose.model("EPF", epfSchema);
 const CreditScore = mongoose.model("CreditScore", creditScoreSchema);
 const Investment = mongoose.model("Investment", investmentSchema);
+const Budget = mongoose.model("Budget", budgetSchema);
 
-export { Asset, Liability, Transaction, EPF, CreditScore, Investment };
+export { Asset, Liability, Transaction, EPF, CreditScore, Investment, Budget };

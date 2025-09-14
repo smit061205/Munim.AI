@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useUser } from "@clerk/clerk-react";
+import { useUser, useAuth } from "@clerk/clerk-react";
 import { usePermissions } from "../context/PermissionsContext";
 import { useAIChat } from "../context/AIChatContext";
 import { motion, AnimatePresence } from "framer-motion";
@@ -9,7 +9,8 @@ import Sidebar from "../components/Sidebar";
 import AIChatSidebar from "../components/AIChatSidebar";
 
 const AccountsPage = () => {
-  const { user, getToken } = useUser();
+  const { user } = useUser();
+  const { getToken, isLoaded, isSignedIn } = useAuth();
   const { permissions } = usePermissions();
   const {
     isAIChatOpen,
@@ -20,23 +21,43 @@ const AccountsPage = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newAccount, setNewAccount] = useState({
+    type: "",
+    bank_name: "",
+    balance: "",
+    account_number: "",
+  });
+  const [createError, setCreateError] = useState("");
+  const [createLoading, setCreateLoading] = useState(false);
 
   useEffect(() => {
     const fetchAccounts = async () => {
-      if (!permissions.assets || !getToken) return;
+      if (!isLoaded || !isSignedIn || !permissions.assets) return;
 
       setLoading(true);
       try {
-        const authApi = createAuthenticatedApi(getToken);
+        const token = await getToken();
+        const authApi = createAuthenticatedApi(() => Promise.resolve(token));
         const response = await authApi.get("/data/assets");
+
+        console.log("🏦 Assets API Response:", response.data);
+        console.log("📊 Raw assets data:", response.data.data);
 
         if (response.data) {
           // Process assets data into accounts format
           const processedAccounts = [];
 
-          response.data.forEach((doc, docIndex) => {
+          // Handle the data as a single document or array of documents
+          const assetsData = Array.isArray(response.data.data)
+            ? response.data.data
+            : [response.data.data];
+
+          assetsData.forEach((doc, docIndex) => {
+            console.log(`🏦 Processing assets doc ${docIndex}:`, doc);
             // Process bank accounts
             if (doc.bank_accounts) {
+              console.log(`💳 Found ${doc.bank_accounts.length} bank accounts`);
               doc.bank_accounts.forEach((account, index) => {
                 processedAccounts.push({
                   id: `bank_${docIndex}_${index}`,
@@ -86,17 +107,24 @@ const AccountsPage = () => {
             }
           });
 
+          console.log("🏦 Processed accounts data:", processedAccounts);
           setAccounts(processedAccounts);
+        } else {
+          console.log("⚠️ No assets data found in response");
         }
       } catch (error) {
-        console.error("Error fetching accounts:", error);
+        console.error("❌ Error fetching accounts:", error);
+        console.error(
+          "❌ Error details:",
+          error.response?.data || error.message
+        );
       } finally {
         setLoading(false);
       }
     };
 
     fetchAccounts();
-  }, [permissions, getToken]);
+  }, [permissions, isLoaded, isSignedIn]);
 
   const totalBalance = accounts.reduce(
     (sum, account) => sum + account.balance,
@@ -227,6 +255,34 @@ const AccountsPage = () => {
     }
   };
 
+  const handleCreateAccount = async (e) => {
+    e.preventDefault();
+    setCreateError("");
+    setCreateLoading(true);
+
+    try {
+      const token = await getToken();
+      const authApi = createAuthenticatedApi(() => Promise.resolve(token));
+      const response = await authApi.post("/data/assets", newAccount);
+
+      console.log("🏦 Create account API Response:", response.data);
+      setAccounts((prevAccounts) => [...prevAccounts, response.data]);
+      setShowCreateModal(false);
+      setNewAccount({
+        type: "",
+        bank_name: "",
+        balance: "",
+        account_number: "",
+      });
+    } catch (error) {
+      console.error("❌ Error creating account:", error);
+      console.error("❌ Error details:", error.response?.data || error.message);
+      setCreateError("Failed to create account. Please try again.");
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
   return (
     <div className="flex h-screen bg-black relative">
       <Sidebar
@@ -281,7 +337,10 @@ const AccountsPage = () => {
           <div className="mb-8">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-medium text-white">Your Accounts</h2>
-              <button className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 font-medium transition-colors">
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 font-medium transition-colors"
+              >
                 Add Account
               </button>
             </div>
@@ -411,6 +470,130 @@ const AccountsPage = () => {
           )}
         </AnimatePresence>
       </div>
+
+      {showCreateModal && (
+        <Modal
+          title="Create New Account"
+          onClose={() => setShowCreateModal(false)}
+        >
+          <form onSubmit={handleCreateAccount}>
+            {createError && (
+              <div className="mb-4 p-3 bg-red-900/20 border border-red-800 text-red-300 rounded">
+                {createError}
+              </div>
+            )}
+
+            <div className="mb-4">
+              <label
+                htmlFor="type"
+                className="block text-sm font-medium text-gray-300 mb-2"
+              >
+                Account Type *
+              </label>
+              <select
+                id="type"
+                required
+                value={newAccount.type}
+                onChange={(e) =>
+                  setNewAccount((prev) => ({ ...prev, type: e.target.value }))
+                }
+                className="block w-full px-3 py-2 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+              >
+                <option value="savings">Savings</option>
+                <option value="current">Current</option>
+                <option value="checking">Checking</option>
+                <option value="investment">Investment</option>
+              </select>
+            </div>
+
+            <div className="mb-4">
+              <label
+                htmlFor="bank_name"
+                className="block text-sm font-medium text-gray-300 mb-2"
+              >
+                Bank Name *
+              </label>
+              <input
+                type="text"
+                id="bank_name"
+                required
+                placeholder="e.g., State Bank of India, HDFC Bank"
+                value={newAccount.bank_name}
+                onChange={(e) =>
+                  setNewAccount((prev) => ({
+                    ...prev,
+                    bank_name: e.target.value,
+                  }))
+                }
+                className="block w-full px-3 py-2 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg focus:ring-emerald-500 focus:border-emerald-500 placeholder-gray-400"
+              />
+            </div>
+
+            <div className="mb-4">
+              <label
+                htmlFor="balance"
+                className="block text-sm font-medium text-gray-300 mb-2"
+              >
+                Initial Balance (₹)
+              </label>
+              <input
+                type="number"
+                id="balance"
+                min="0"
+                step="0.01"
+                placeholder="10000"
+                value={newAccount.balance}
+                onChange={(e) =>
+                  setNewAccount((prev) => ({
+                    ...prev,
+                    balance: e.target.value,
+                  }))
+                }
+                className="block w-full px-3 py-2 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg focus:ring-emerald-500 focus:border-emerald-500 placeholder-gray-400"
+              />
+            </div>
+
+            <div className="mb-6">
+              <label
+                htmlFor="account_number"
+                className="block text-sm font-medium text-gray-300 mb-2"
+              >
+                Account Number (Optional)
+              </label>
+              <input
+                type="text"
+                id="account_number"
+                placeholder="****1234"
+                value={newAccount.account_number}
+                onChange={(e) =>
+                  setNewAccount((prev) => ({
+                    ...prev,
+                    account_number: e.target.value,
+                  }))
+                }
+                className="block w-full px-3 py-2 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg focus:ring-emerald-500 focus:border-emerald-500 placeholder-gray-400"
+              />
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(false)}
+                className="px-4 py-2 text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={createLoading}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+              >
+                {createLoading ? "Creating..." : "Create Account"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 };

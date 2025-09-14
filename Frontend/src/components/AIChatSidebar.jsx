@@ -3,6 +3,8 @@ import { usePermissions } from "../context/PermissionsContext";
 import { createAuthenticatedApi, sendQuery } from "../services/api";
 import { useAuth } from "@clerk/clerk-react";
 import { motion, AnimatePresence } from "framer-motion";
+import PermissionsManager from "./PermissionsManager";
+import { useAIChat } from "../context/AIChatContext";
 
 const AIChatSidebar = ({
   isOpen,
@@ -10,23 +12,79 @@ const AIChatSidebar = ({
   isCollapsed = false,
   onToggleCollapse,
 }) => {
-  const { getToken } = useAuth();
+  const { getToken, isLoaded, isSignedIn, userId } = useAuth();
   const { getAllowedCategories } = usePermissions();
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      type: "ai",
-      content:
-        "Hello! I'm your AI financial assistant. Ask me anything about your finances and I'll help you with insights based on your data.",
-      timestamp: new Date(),
-    },
-  ]);
+  const { messages, setMessages, addMessage } = useAIChat();
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [isPermissionsOpen, setIsPermissionsOpen] = useState(false);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
+
+  // Format AI response to remove asterisks and improve readability
+  const formatAIResponse = (text) => {
+    if (!text) return text;
+
+    return (
+      text
+        // Remove verbose greetings and introductions
+        .replace(
+          /^Greetings!\s*As\s+Munim\.AI,?\s*with\s+my\s+\d+\+?\s*years.*?(?=\n|$)/i,
+          ""
+        )
+        .replace(
+          /^Hello!\s*I'm\s+your\s+AI\s+financial\s+assistant\..*?(?=\n|$)/i,
+          ""
+        )
+        .replace(/^Based\s+on\s+the\s+provided\s+data,?\s*/i, "")
+
+        // Clean up excessive markdown headers
+        .replace(/#{4,}/g, "###")
+        .replace(
+          /###\s*Your\s+Financial\s+Standing:\s*/i,
+          "**Financial Summary:**\n"
+        )
+        .replace(
+          /###\s*Your\s+Monthly\s+Commitments:\s*/i,
+          "**Monthly Commitments:**\n"
+        )
+        .replace(/###\s*Analyzing.*?:\s*/i, "**Expense Analysis:**\n")
+        .replace(/###\s*Munim\.AI's\s+Advice.*?:\s*/i, "**Recommendation:**\n")
+        .replace(
+          /###\s*Actionable\s+Recommendations.*?:\s*/i,
+          "**Next Steps:**\n"
+        )
+
+        // Remove redundant phrases
+        .replace(
+          /I've\s+thoroughly\s+reviewed\s+your\s+financial\s+data\s+to\s+help\s+you.*?\.\s*/i,
+          ""
+        )
+        .replace(/First,?\s*let's\s+look\s+at.*?\:\s*/i, "")
+        .replace(
+          /A\s+Critical\s+Observation\s+Regarding.*?\:\s*/i,
+          "**Note on Rent Expenses:**\n"
+        )
+
+        // Clean up repetitive content
+        .replace(/\(Last\s+\d+\s+Months.*?\)/g, "")
+        .replace(/Scenario\s+\d+:\s*/g, "• ")
+
+        // Remove random asterisks that aren't part of markdown formatting
+        .replace(/\*{1,2}([^*\n]+)\*{1,2}/g, "$1")
+        .replace(/\*+/g, "")
+
+        // Clean up excessive whitespace and line breaks
+        .replace(/\n{3,}/g, "\n\n")
+        .replace(/\s+/g, " ")
+        .trim()
+
+        // Ensure proper spacing after periods
+        .replace(/\.([A-Z])/g, ". $1")
+    );
+  };
 
   const sidebarVariants = {
     initial: {
@@ -78,37 +136,54 @@ const AIChatSidebar = ({
   }, [messages]);
 
   const handleSendMessage = async () => {
-    if ((!inputValue.trim() && uploadedFiles.length === 0) || isLoading) return;
+    if (!inputValue.trim() && uploadedFiles.length === 0) return;
+    if (isLoading) return;
+
+    const messageContent =
+      inputValue.trim() || "Please analyze the uploaded files.";
+
+    console.log("🔍 Debug - messageContent:", messageContent);
+    console.log("🔍 Debug - inputValue:", inputValue);
+    console.log("🔍 Debug - uploadedFiles:", uploadedFiles);
 
     const userMessage = {
       id: Date.now(),
       type: "user",
-      content: inputValue.trim(),
+      content: messageContent,
       timestamp: new Date(),
-      files: uploadedFiles.length > 0 ? [...uploadedFiles] : undefined,
+      files: uploadedFiles.length > 0 ? uploadedFiles : undefined,
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    addMessage(userMessage);
     setInputValue("");
     setUploadedFiles([]);
     setIsLoading(true);
 
     try {
-      const authApi = createAuthenticatedApi(getToken);
+      const token = await getToken();
+      const authApi = createAuthenticatedApi(() => Promise.resolve(token));
       const allowedCategories = getAllowedCategories();
+
+      console.log("🔍 Debug - About to send query with:", {
+        messageContent,
+        allowedCategories,
+        filesCount: uploadedFiles.length,
+      });
 
       const response = await sendQuery(
         authApi,
-        userMessage.content,
-        allowedCategories
+        messageContent,
+        allowedCategories,
+        uploadedFiles
       );
 
       const aiMessage = {
         id: Date.now() + 1,
         type: "ai",
-        content:
+        content: formatAIResponse(
           response.data.response ||
-          "I apologize, but I couldn't process your request at the moment. Please try again.",
+            "I apologize, but I couldn't process your request at the moment. Please try again."
+        ),
         timestamp: new Date(),
         metadata: {
           dataAvailable: response.data.data_available,
@@ -117,7 +192,7 @@ const AIChatSidebar = ({
         },
       };
 
-      setMessages((prev) => [...prev, aiMessage]);
+      addMessage(aiMessage);
     } catch (error) {
       console.error("Error sending query:", error);
 
@@ -136,12 +211,12 @@ const AIChatSidebar = ({
       const errorAiMessage = {
         id: Date.now() + 1,
         type: "ai",
-        content: errorMessage,
+        content: formatAIResponse(errorMessage),
         timestamp: new Date(),
         isError: true,
       };
 
-      setMessages((prev) => [...prev, errorAiMessage]);
+      addMessage(errorAiMessage);
     } finally {
       setIsLoading(false);
     }
@@ -149,9 +224,13 @@ const AIChatSidebar = ({
 
   const handleFileUpload = (e) => {
     const files = e.target.files;
+    if (!files || files.length === 0) return;
+
     const newFiles = Array.from(files).map((file) => ({
       name: file.name,
       size: file.size,
+      file: file, // Store the actual file object
+      type: file.type,
     }));
     setUploadedFiles((prev) => [...prev, ...newFiles]);
   };
@@ -185,7 +264,7 @@ const AIChatSidebar = ({
               ease: [0.4, 0.0, 0.2, 1],
             },
           }}
-          className="bg-black border-l border-gray-800 shadow-2xl flex flex-col h-full"
+          className="bg-black border-l border-gray-800 shadow-2xl flex flex-col h-[100vh] max-h-[100vh]"
           style={{
             willChange: "transform, width, opacity",
             transform: "translate3d(0, 0, 0)", // Force GPU acceleration
@@ -269,6 +348,28 @@ const AIChatSidebar = ({
                     />
                   </svg>
                 </motion.button>
+                {/* Permissions Button */}
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => setIsPermissionsOpen(true)}
+                  className="text-gray-400 hover:text-emerald-400 transition-colors p-2 rounded-lg hover:cursor-pointer"
+                  title="Data Permissions"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                    />
+                  </svg>
+                </motion.button>
               </div>
             </div>
             <AnimatePresence>
@@ -293,10 +394,13 @@ const AIChatSidebar = ({
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                className="flex-1 flex flex-col"
+                className="flex-1 flex flex-col min-h-0 h-full"
               >
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-black">
+                <div
+                  className="flex-1 overflow-y-auto p-4 space-y-4 bg-black"
+                  style={{ maxHeight: "calc(100% - 120px)" }}
+                >
                   {messages.map((message) => (
                     <div
                       key={message.id}
@@ -313,8 +417,10 @@ const AIChatSidebar = ({
                             : "bg-gray-800 text-gray-100"
                         }`}
                       >
-                        <p className="text-sm leading-relaxed">
-                          {message.content}
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                          {message.type === "ai"
+                            ? formatAIResponse(message.content)
+                            : message.content}
                         </p>
                         {message.files && message.files.length > 0 && (
                           <div className="mt-2 space-y-1">
@@ -370,7 +476,7 @@ const AIChatSidebar = ({
                 </div>
 
                 {/* Input Area */}
-                <div className="border-t border-gray-800 p-4 flex-shrink-0 bg-black">
+                <div className="border-t border-gray-800 p-4 flex-shrink-0 bg-black sticky bottom-0">
                   {uploadedFiles.length > 0 && (
                     <div className="mb-3 space-y-2">
                       {uploadedFiles.map((file, index) => (
@@ -522,6 +628,10 @@ const AIChatSidebar = ({
               </motion.div>
             )}
           </AnimatePresence>
+          <PermissionsManager
+            isOpen={isPermissionsOpen}
+            onClose={() => setIsPermissionsOpen(false)}
+          />
         </motion.div>
       )}
     </AnimatePresence>
