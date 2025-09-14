@@ -266,12 +266,12 @@ const TransactionsPage = () => {
               <h2 className="text-xl font-medium text-white">
                 Transaction Summary
               </h2>
-              <button
+              {/* <button
                 onClick={handleAddTransaction}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 font-medium transition-colors"
               >
                 Add Transaction
-              </button>
+              </button> */}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-gray-950 p-6 border border-gray-800 shadow-xl">

@@ -253,7 +253,7 @@ const ReportsPage = () => {
         {/* Content */}
         <div className="p-8 bg-black">
           {/* Report Controls */}
-          <div className="mb-8">
+          {/* <div className="mb-8">
             <div className="bg-gray-950 p-6 border border-gray-800 shadow-xl">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-medium text-white">
@@ -294,7 +294,7 @@ const ReportsPage = () => {
                 financial overview
               </p>
             </div>
-          </div>
+          </div> */}
 
           {/* Key Metrics */}
           <div className="mb-8">

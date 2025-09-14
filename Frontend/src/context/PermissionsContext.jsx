@@ -57,20 +57,23 @@ export const PermissionsProvider = ({ children }) => {
     }
   };
 
-  // Save permissions to backend
+  // Save permissions to backend (bulk)
   const savePermissions = async (newPermissions) => {
     if (!isSignedIn || !isLoaded || !session) return;
 
     try {
       const token = await session.getToken();
-      const response = await fetch("http://localhost:5001/api/permissions", {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ permissions: newPermissions }),
-      });
+      const response = await fetch(
+        "http://localhost:5001/api/permissions/bulk",
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ permissions: newPermissions }),
+        }
+      );
 
       if (!response.ok) {
         throw new Error("Failed to update permissions");
@@ -126,6 +129,7 @@ export const PermissionsProvider = ({ children }) => {
         loading,
         error,
         refreshPermissions: loadPermissions,
+        setPermissions, // expose for controlled updates if needed
       }}
     >
       {children}

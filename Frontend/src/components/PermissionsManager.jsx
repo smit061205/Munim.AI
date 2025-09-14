@@ -1,9 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@clerk/clerk-react";
+import { usePermissions } from "../context/PermissionsContext";
 import "./PermissionsManager.css";
 
 const PermissionsManager = ({ isOpen, onClose }) => {
   const { getToken } = useAuth();
+  const {
+    permissions: ctxPermissions,
+    setPermissions: setCtxPermissions,
+    refreshPermissions,
+  } = usePermissions();
   const [permissions, setPermissions] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -42,8 +48,20 @@ const PermissionsManager = ({ isOpen, onClose }) => {
     },
   ];
 
+  // Keep local modal state in sync with context when opening or when context changes
   useEffect(() => {
     if (isOpen) {
+      setPermissions(ctxPermissions || {});
+      setLoading(false);
+    }
+  }, [isOpen, ctxPermissions]);
+
+  useEffect(() => {
+    if (
+      isOpen &&
+      (!ctxPermissions || Object.keys(ctxPermissions).length === 0)
+    ) {
+      // Fallback loading from server if context hasn't loaded yet
       fetchPermissions();
     }
   }, [isOpen]);
@@ -67,6 +85,7 @@ const PermissionsManager = ({ isOpen, onClose }) => {
 
       const data = await response.json();
       setPermissions(data.permissions);
+      setCtxPermissions?.(data.permissions);
     } catch (err) {
       console.error("Error fetching permissions:", err);
       setError("Failed to load permissions");
@@ -96,9 +115,12 @@ const PermissionsManager = ({ isOpen, onClose }) => {
 
       const data = await response.json();
       setPermissions(data.permissions);
+      setCtxPermissions?.(data.permissions);
     } catch (err) {
       console.error("Error updating permission:", err);
       setError("Failed to update permission");
+      // re-sync from server/context
+      refreshPermissions?.();
     } finally {
       setSaving(false);
     }
@@ -106,6 +128,10 @@ const PermissionsManager = ({ isOpen, onClose }) => {
 
   const handleToggle = (category) => {
     const currentValue = permissions[category];
+    const next = { ...permissions, [category]: !currentValue };
+    // optimistic update locally and in context
+    setPermissions(next);
+    setCtxPermissions?.(next);
     updatePermission(category, !currentValue);
   };
 

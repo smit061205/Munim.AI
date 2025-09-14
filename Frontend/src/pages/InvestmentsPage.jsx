@@ -320,12 +320,12 @@ const InvestmentsPage = () => {
           <div className="mb-8">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-medium text-white">Your Holdings</h2>
-              <button
+              {/* <button
                 onClick={handleAddInvestment}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 font-medium transition-colors"
               >
                 Add Investment
-              </button>
+              </button> */}
             </div>
 
             <div className="bg-gray-950 border border-gray-800 overflow-hidden shadow-xl">

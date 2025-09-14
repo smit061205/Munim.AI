@@ -337,12 +337,12 @@ const AccountsPage = () => {
           <div className="mb-8">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-medium text-white">Your Accounts</h2>
-              <button
+              {/* <button
                 onClick={() => setShowCreateModal(true)}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 font-medium transition-colors"
               >
                 Add Account
-              </button>
+              </button> */}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

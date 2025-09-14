@@ -146,17 +146,23 @@ const AIChatSidebar = ({
     console.log("🔍 Debug - inputValue:", inputValue);
     console.log("🔍 Debug - uploadedFiles:", uploadedFiles);
 
+    const filesToSend = uploadedFiles.slice();
+
     const userMessage = {
       id: Date.now(),
       type: "user",
       content: messageContent,
       timestamp: new Date(),
-      files: uploadedFiles.length > 0 ? uploadedFiles : undefined,
+      files: filesToSend.length > 0 ? filesToSend : undefined,
     };
 
     addMessage(userMessage);
     setInputValue("");
     setUploadedFiles([]);
+    // Also reset file input after sending message
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
     setIsLoading(true);
 
     try {
@@ -167,14 +173,14 @@ const AIChatSidebar = ({
       console.log("🔍 Debug - About to send query with:", {
         messageContent,
         allowedCategories,
-        filesCount: uploadedFiles.length,
+        filesCount: filesToSend.length,
       });
 
       const response = await sendQuery(
         authApi,
         messageContent,
         allowedCategories,
-        uploadedFiles
+        filesToSend
       );
 
       const aiMessage = {
@@ -233,6 +239,11 @@ const AIChatSidebar = ({
       type: file.type,
     }));
     setUploadedFiles((prev) => [...prev, ...newFiles]);
+
+    // Reset file input to allow selecting the same file again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const removeFile = (index) => {
@@ -297,7 +308,7 @@ const AIChatSidebar = ({
                       transition={{ duration: 0.2 }}
                       className="text-lg font-medium text-white whitespace-nowrap"
                     >
-                      AI Assistant
+                      Munimji
                     </motion.h2>
                   )}
                 </AnimatePresence>

@@ -17,6 +17,7 @@ import dashboardRoutes from "./routes/dashboard.js";
 import analyticsRoutes from "./routes/analytics.js";
 import permissionRoutes from "./routes/permissions.js";
 import dataRoutes from "./routes/data.js";
+import ingestRoutes from "./routes/ingest.js";
 
 // Import middleware
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -97,6 +98,7 @@ app.use("/api/analytics", requireAuth, analyticsRoutes);
 app.use("/api/permissions", requireAuth, permissionRoutes);
 app.use("/api/query", requireAuth, upload.any(), queryRoutes);
 app.use("/api/data", requireAuth, dataRoutes);
+app.use("/api/ingest", requireAuth, upload.any(), ingestRoutes);
 
 // Error handling middleware
 app.use(errorHandler);

@@ -1,23 +1,22 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import Groq from "groq-sdk";
 import dotenv from "dotenv";
 import XLSX from "xlsx"; // Import XLSX library
 import UserPermissions from "../models/UserPermissions.js";
+import { IngestService } from "./ingestService.js";
 
 dotenv.config();
 
-class GeminiService {
+class LLMService {
   constructor() {
-    this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    // Use 1.5 Flash as primary - more stable than 2.5 Flash
-    this.model = this.genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
+    this.groq = new Groq({
+      apiKey: process.env.GROQ_API_KEY,
     });
-    // Fallback model for when primary model is overloaded
-    this.fallbackModel = this.genAI.getGenerativeModel({
-      model: "gemini-1.0-pro",
-    });
+    this.model = "llama-3.1-8b-instant"; // Fast, reliable primary model
+    this.fallbackModel = "mixtral-8x7b-32768"; // Larger context fallback
     // Conversation memory storage
     this.conversationMemory = new Map(); // userId -> { count, history }
+    this.MAX_HISTORY = 50; // cap per-user history to avoid unbounded growth
+    this.RECENT_TURNS_FOR_CONTEXT = 3; // always include last 3 Q/A turns
 
     // Retry configuration
     this.retryConfig = {
@@ -27,6 +26,23 @@ class GeminiService {
       backoffMultiplier: 1.5, // Reduced from 2 to 1.5
       requestTimeout: 10000, // 10 second timeout per request
     };
+  }
+
+  // Naive intent detection: user asks to upload/ingest expenses/transactions
+  detectIngestIntent(question = "") {
+    const q = question.toLowerCase();
+    const uploadWords = ["upload", "ingest", "import", "save", "add"];
+    const dataWords = [
+      "expense",
+      "expenses",
+      "transaction",
+      "transactions",
+      "spend",
+      "spending",
+    ];
+    const hasUpload = uploadWords.some((w) => q.includes(w));
+    const hasData = dataWords.some((w) => q.includes(w));
+    return hasUpload && hasData;
   }
 
   // Sleep utility for retry delays
@@ -70,28 +86,37 @@ class GeminiService {
     );
   }
 
-  // Generate content with retry logic and fallback
-  async generateContentWithRetry(prompt, processedFiles, useFallback = false) {
+  // Generate content with Groq API and retry logic
+  async generateContentWithRetry(prompt, useFallback = false) {
     const model = useFallback ? this.fallbackModel : this.model;
-    const modelName = useFallback ? "gemini-1.0-pro" : "gemini-1.5-flash";
 
     for (let attempt = 0; attempt <= this.retryConfig.maxRetries; attempt++) {
       try {
         console.log(
-          `🔄 Attempting API call (${modelName}, attempt ${attempt + 1}/${
+          `🔄 Attempting API call (${model}, attempt ${attempt + 1}/${
             this.retryConfig.maxRetries + 1
           })`
         );
 
-        const result = await model.generateContent([prompt, ...processedFiles]);
+        const result = await this.groq.chat.completions.create({
+          messages: [
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+          model: model,
+          temperature: 0.7,
+          max_tokens: 2048,
+        });
 
         console.log(
-          `✅ API call successful with ${modelName} on attempt ${attempt + 1}`
+          `✅ API call successful with ${model} on attempt ${attempt + 1}`
         );
         return result;
       } catch (error) {
         console.error(
-          `❌ API call failed with ${modelName} (attempt ${attempt + 1}):`,
+          `❌ API call failed with ${model} (attempt ${attempt + 1}):`,
           {
             error: error.message,
             code: error.code,
@@ -131,6 +156,11 @@ class GeminiService {
       timestamp: new Date().toISOString(),
     });
 
+    // Trim history to MAX_HISTORY
+    if (userMemory.history.length > this.MAX_HISTORY) {
+      userMemory.history = userMemory.history.slice(-this.MAX_HISTORY);
+    }
+
     // Every 5th prompt, create a summary
     if (userMemory.count % 5 === 0) {
       const recentConversations = userMemory.history.slice(-5);
@@ -166,12 +196,27 @@ class GeminiService {
 
     const userMemory = this.conversationMemory.get(userId);
 
-    // On 6th prompt and every subsequent prompt, include summary
-    if (userMemory.count >= 5 && userMemory.summary) {
-      return userMemory.summary + "\n";
+    let context = "";
+
+    // Always include the last N Q/A turns for continuity
+    const recent = userMemory.history.slice(-this.RECENT_TURNS_FOR_CONTEXT);
+    if (recent.length > 0) {
+      context += "RECENT CONVERSATION:\n";
+      recent.forEach((conv, idx) => {
+        context += `${idx + 1}. Q: ${conv.question}\n`;
+        context += `   A: ${conv.response.substring(0, 240)}${
+          conv.response.length > 240 ? "..." : ""
+        }\n`;
+      });
+      context += "\n";
     }
 
-    return "";
+    // Include periodic summary when available (after 5 turns)
+    if (userMemory.count >= 5 && userMemory.summary) {
+      context += userMemory.summary + "\n";
+    }
+
+    return context;
   }
 
   // Format user financial data into a structured prompt (with permission filtering)
@@ -303,14 +348,14 @@ class GeminiService {
     return dataContext;
   }
 
-  // Create a comprehensive prompt for Gemini
+  // Create a comprehensive prompt for Groq
   async createPrompt(question, userData, userId = null, fileContext = "") {
-    console.log(`🧠 GeminiService.createPrompt called:`, {
+    console.log(`🧠 LLMService.createPrompt called:`, {
       userId,
       question:
         question.length > 50 ? question.substring(0, 50) + "..." : question,
       userDataCategories: userData ? Object.keys(userData) : [],
-      hasApiKey: !!process.env.GEMINI_API_KEY,
+      hasApiKey: !!process.env.GROQ_API_KEY,
       timestamp: new Date().toISOString(),
     });
 
@@ -363,10 +408,11 @@ Instructions:
 13. Do NOT start responses with "Hello! As Munim.AI" or similar introductions
 14. IMPORTANT: Default to brief, actionable answers. Save detailed explanations for when explicitly requested.
 15. If certain financial data is not available, mention that the user hasn't granted permission for that data category.
+16. If uploaded files are provided, prioritize them in your response and reference the fileContext explicitly.
 
 Please provide a helpful but CONCISE financial response:`;
 
-    console.log(`📤 Prepared prompt for Gemini:`, {
+    console.log(`📤 Prepared prompt for Groq:`, {
       promptLength: prompt.length,
       promptPreview: prompt.substring(0, 300) + "...",
     });
@@ -423,13 +469,20 @@ Please provide a helpful but CONCISE financial response:`;
     }
   }
 
-  // Process uploaded files for Gemini API
+  // Process uploaded files for Groq API
   async processFiles(files) {
     if (!files || files.length === 0)
-      return { processedFiles: [], fileContext: "" };
+      return {
+        processedFiles: [],
+        fileContext: "",
+        parsedExcelMeta: [],
+        parsedExcelData: [],
+      };
 
     const processedFiles = [];
     let fileContext = "";
+    const parsedExcelMeta = [];
+    const parsedExcelData = [];
 
     for (const file of files) {
       try {
@@ -459,6 +512,21 @@ Please provide a helpful but CONCISE financial response:`;
               2
             )}\n`;
 
+            // Collect metadata for UI confirmation
+            parsedExcelMeta.push({
+              name: file.originalname,
+              sheets: Object.keys(excelData),
+              rowsBySheet: Object.fromEntries(
+                Object.entries(excelData).map(([sheet, obj]) => [
+                  sheet,
+                  obj.rowCount || (obj.data ? obj.data.length : 0),
+                ])
+              ),
+            });
+
+            // Keep raw parsed JSON for potential ingestion
+            parsedExcelData.push({ name: file.originalname, data: excelData });
+
             console.log(
               `📊 Added Excel data to prompt context: ${file.originalname}`
             );
@@ -481,7 +549,7 @@ Please provide a helpful but CONCISE financial response:`;
       }
     }
 
-    return { processedFiles, fileContext };
+    return { processedFiles, fileContext, parsedExcelMeta, parsedExcelData };
   }
 
   // Check if user has access to AI assistant
@@ -503,24 +571,24 @@ Please provide a helpful but CONCISE financial response:`;
     return hasAccess;
   }
 
-  // Call Gemini API with the formatted prompt and files
+  // Call Groq API with the formatted prompt and files
   async generateResponse(question, userData, userId = null, files = []) {
-    console.log(`🧠 GeminiService.generateResponse called:`, {
+    console.log(`🧠 LLMService.generateResponse called:`, {
       userId,
       question:
         question?.substring(0, 100) + (question?.length > 100 ? "..." : ""),
       userDataCategories: Object.keys(userData || {}),
-      hasApiKey: !!process.env.GEMINI_API_KEY,
+      hasApiKey: !!process.env.GROQ_API_KEY,
       timestamp: new Date().toISOString(),
     });
 
     try {
-      if (!process.env.GEMINI_API_KEY) {
-        console.error(`❌ Missing GEMINI_API_KEY environment variable`);
+      if (!process.env.GROQ_API_KEY) {
+        console.error(`❌ Missing GROQ_API_KEY environment variable`);
         return {
           success: false,
           response: "AI service is not configured properly. Missing API key.",
-          error: "Missing GEMINI_API_KEY",
+          error: "Missing GROQ_API_KEY",
         };
       }
 
@@ -534,24 +602,69 @@ Please provide a helpful but CONCISE financial response:`;
       }
 
       console.log(
-        `🔑 Using Gemini API key: ${process.env.GEMINI_API_KEY.substring(
-          0,
-          10
-        )}...`
+        `🔑 Using Groq API key: ${process.env.GROQ_API_KEY.substring(0, 10)}...`
       );
 
-      const { processedFiles, fileContext } = await this.processFiles(files);
+      const { fileContext, parsedExcelMeta, parsedExcelData } =
+        await this.processFiles(files);
+
+      // Optional: Ingest transactions if the user asks to upload expenses
+      let ingestionResult = null;
+
+      // Debug logging for ingestion detection
+      console.log("🔍 Ingestion detection check:", {
+        userId: !!userId,
+        hasExcelData: parsedExcelData.length > 0,
+        question: question.substring(0, 100),
+        intentDetected: this.detectIngestIntent(question),
+      });
+
+      if (
+        userId &&
+        parsedExcelData.length > 0 &&
+        this.detectIngestIntent(question)
+      ) {
+        console.log("🚀 Starting auto-ingestion with userId:", userId);
+        try {
+          // Use the first parsed Excel for ingestion
+          const parsed = parsedExcelData[0].data;
+          console.log("📊 Calling IngestService.ingestTransactions with:", {
+            clerkId: userId,
+            dataSheets: Object.keys(parsed),
+            firstSheetRows: parsed[Object.keys(parsed)[0]]?.rowCount || 0,
+          });
+          ingestionResult = await IngestService.ingestTransactions(
+            userId,
+            parsed
+          );
+          console.log("🟢 Ingestion completed:", ingestionResult);
+        } catch (ingErr) {
+          console.error("❌ Ingestion failed:", ingErr);
+          ingestionResult = {
+            inserted: 0,
+            skipped: 0,
+            errors: [ingErr.message || "Unknown error"],
+          };
+        }
+      } else {
+        console.log("⏭️ Skipping auto-ingestion - conditions not met");
+      }
+
       const prompt = await this.createPrompt(
         question,
         userData,
         userId,
-        fileContext
+        fileContext +
+          (ingestionResult
+            ? `\n\nSYSTEM NOTE: ${
+                ingestionResult.inserted || 0
+              } expense rows were imported from the uploaded Excel.`
+            : "")
       );
 
-      console.log(`📤 Sending prompt to Gemini:`, {
+      console.log(`📤 Sending prompt to Groq:`, {
         promptLength: prompt.length,
         promptPreview: prompt.substring(0, 300) + "...",
-        filesCount: processedFiles.length,
       });
 
       let result;
@@ -559,25 +672,17 @@ Please provide a helpful but CONCISE financial response:`;
 
       try {
         // Try primary model first
-        result = await this.generateContentWithRetry(
-          prompt,
-          processedFiles,
-          false
-        );
+        result = await this.generateContentWithRetry(prompt, false);
       } catch (primaryError) {
         console.warn(
-          `⚠️ Primary model (gemini-1.5-flash) failed after retries:`,
+          `⚠️ Primary model (${this.model}) failed after retries:`,
           primaryError.message
         );
 
         try {
-          // Fallback to older model
-          console.log(`🔄 Falling back to gemini-1.0-pro...`);
-          result = await this.generateContentWithRetry(
-            prompt,
-            processedFiles,
-            true
-          );
+          // Fallback to faster model
+          console.log(`🔄 Falling back to ${this.fallbackModel}...`);
+          result = await this.generateContentWithRetry(prompt, true);
           usedFallback = true;
         } catch (fallbackError) {
           console.error(`❌ Both models failed:`, {
@@ -595,26 +700,25 @@ Please provide a helpful but CONCISE financial response:`;
         }
       }
 
-      console.log(`📥 Received response from Gemini:`, {
+      console.log(`📥 Received response from Groq:`, {
         hasResult: !!result,
-        hasResponse: !!result?.response,
-        candidatesCount: result?.response?.candidates?.length || 0,
+        hasChoices: !!result?.choices,
+        choicesCount: result?.choices?.length || 0,
         usedFallback,
       });
 
-      const response = result.response;
-      const text = response.text();
+      const text = result.choices?.[0]?.message?.content || "";
 
-      console.log(`✅ Gemini API response received:`, {
+      console.log(`✅ Groq API response received:`, {
         responseLength: text?.length || 0,
         responsePreview: text?.substring(0, 200) + "...",
         timestamp: new Date().toISOString(),
-        modelUsed: usedFallback ? "gemini-1.0-pro" : "gemini-1.5-flash",
+        modelUsed: usedFallback ? this.fallbackModel : this.model,
       });
 
       // Validate and clean the response
       if (!text || text.trim().length === 0) {
-        console.error(`❌ Empty response from Gemini API`);
+        console.error(`❌ Empty response from Groq API`);
         return {
           success: false,
           response:
@@ -655,15 +759,24 @@ Please provide a helpful but CONCISE financial response:`;
       return {
         success: true,
         response: text,
+        files_processed: parsedExcelMeta,
+        ingestion: ingestionResult || undefined,
+        memory: userId
+          ? {
+              recentTurnsUsed: this.RECENT_TURNS_FOR_CONTEXT,
+              totalTurns: this.conversationMemory.get(userId)?.count || 0,
+              hasSummary: !!this.conversationMemory.get(userId)?.summary,
+            }
+          : undefined,
       };
     } catch (error) {
-      console.error(`❌ Error in GeminiService.generateResponse:`, {
+      console.error(`❌ Error in LLMService.generateResponse:`, {
         error: error.message,
         stack: error.stack,
         userId,
         question: question?.substring(0, 100),
         userDataCategories: Object.keys(userData || {}),
-        apiKeyPresent: !!process.env.GEMINI_API_KEY,
+        apiKeyPresent: !!process.env.GROQ_API_KEY,
       });
 
       return {
@@ -676,4 +789,4 @@ Please provide a helpful but CONCISE financial response:`;
   }
 }
 
-export default new GeminiService();
+export default new LLMService();

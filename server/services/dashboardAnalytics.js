@@ -87,20 +87,53 @@ export class DashboardAnalytics {
           "transactions"
         );
 
+        // Debug: Show sample transaction data to understand format
+        if (transactions.length > 0) {
+          console.log(
+            "🔍 Sample transactions:",
+            transactions.slice(0, 3).map((t) => ({
+              date: t.date,
+              dateType: typeof t.date,
+              amount: t.amount,
+              amountType: typeof t.amount,
+              category: t.category,
+              description: t.description,
+            }))
+          );
+        }
+
         const currentMonth = new Date().toISOString().slice(0, 7);
         console.log("📅 Current month filter:", currentMonth);
 
         // Helper function to check if transaction is current month income
         const isCurrentMonthIncome = (transaction) => {
           const date = transaction.date;
-          if (!date) return false;
+          if (!date) {
+            console.log("⚠️ Transaction missing date:", transaction);
+            return false;
+          }
 
           let transactionDate;
           if (date instanceof Date) {
             transactionDate = date;
           } else if (typeof date === "string") {
+            // Handle different date formats from Excel ingestion
             transactionDate = new Date(date);
+            // If invalid date, try parsing DD/MM/YYYY format
+            if (isNaN(transactionDate.getTime())) {
+              const parts = date.split("/");
+              if (parts.length === 3) {
+                // Assume DD/MM/YYYY format
+                transactionDate = new Date(parts[2], parts[1] - 1, parts[0]);
+              }
+            }
           } else {
+            console.log("⚠️ Invalid date format:", date, typeof date);
+            return false;
+          }
+
+          if (isNaN(transactionDate.getTime())) {
+            console.log("⚠️ Could not parse date:", date);
             return false;
           }
 
@@ -116,23 +149,39 @@ export class DashboardAnalytics {
             transactionDate.getMonth() === currentDate.getMonth() - 1 &&
             transactionDate.getDate() >= 28; // Last few days of previous month
 
-          return (
-            (isCurrentMonth || isPreviousMonthSalary) &&
-            (transaction.amount || 0) > 0
-          );
+          const amount = parseFloat(transaction.amount) || 0;
+          return (isCurrentMonth || isPreviousMonthSalary) && amount > 0;
         };
 
         // Helper function to check if transaction is current month expense
         const isCurrentMonthExpense = (transaction) => {
           const date = transaction.date;
-          if (!date) return false;
+          if (!date) {
+            console.log("⚠️ Transaction missing date:", transaction);
+            return false;
+          }
 
           let transactionDate;
           if (date instanceof Date) {
             transactionDate = date;
           } else if (typeof date === "string") {
+            // Handle different date formats from Excel ingestion
             transactionDate = new Date(date);
+            // If invalid date, try parsing DD/MM/YYYY format
+            if (isNaN(transactionDate.getTime())) {
+              const parts = date.split("/");
+              if (parts.length === 3) {
+                // Assume DD/MM/YYYY format
+                transactionDate = new Date(parts[2], parts[1] - 1, parts[0]);
+              }
+            }
           } else {
+            console.log("⚠️ Invalid date format:", date, typeof date);
+            return false;
+          }
+
+          if (isNaN(transactionDate.getTime())) {
+            console.log("⚠️ Could not parse date:", date);
             return false;
           }
 
@@ -141,20 +190,21 @@ export class DashboardAnalytics {
             transactionDate.getFullYear() === currentDate.getFullYear() &&
             transactionDate.getMonth() === currentDate.getMonth();
 
-          return isCurrentMonth && (transaction.amount || 0) < 0;
+          const amount = parseFloat(transaction.amount) || 0;
+          return isCurrentMonth && amount < 0;
         };
 
         // Filter income transactions
         const incomeTransactions = transactions.filter(isCurrentMonthIncome);
         monthlyIncome = incomeTransactions.reduce(
-          (sum, t) => sum + (t.amount || 0),
+          (sum, t) => sum + (parseFloat(t.amount) || 0),
           0
         );
 
         // Filter expense transactions
         const expenseTransactions = transactions.filter(isCurrentMonthExpense);
         monthlyExpenses = expenseTransactions.reduce(
-          (sum, t) => sum + Math.abs(t.amount || 0),
+          (sum, t) => sum + Math.abs(parseFloat(t.amount) || 0),
           0
         );
 

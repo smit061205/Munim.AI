@@ -277,7 +277,7 @@ const DashboardPage = () => {
               </div>
               <div className="bg-gray-950 p-6 border border-gray-800 shadow-xl hover:shadow-2xl transition-all duration-300">
                 <h3 className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
-                  Saved Income
+                  Monthly Income
                 </h3>
                 <p className="text-3xl font-semibold text-white mb-2">
                   ₹{monthlyIncome.toLocaleString()}
@@ -312,7 +312,7 @@ const DashboardPage = () => {
                   <h3 className="text-lg font-medium text-white">
                     Spending Over Time
                   </h3>
-                  <div className="flex space-x-2">
+                  {/* <div className="flex space-x-2">
                     <button
                       onClick={() => {
                         setSelectedTimePeriod("1M");
@@ -337,11 +337,11 @@ const DashboardPage = () => {
                     >
                       1Y
                     </button>
-                  </div>
+                  </div> */}
                 </div>
-                <p className="text-2xl font-medium text-white mb-4">
+                {/* <p className="text-2xl font-medium text-white mb-4">
                   ₹{filteredData?.expenses?.total?.toLocaleString()}
-                </p>
+                </p> */}
                 {monthlySpending && (
                   <ExpenseChart
                     data={monthlySpending}

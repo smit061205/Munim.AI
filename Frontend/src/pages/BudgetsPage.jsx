@@ -7,6 +7,7 @@ import {
   createAuthenticatedApi,
   fetchBudgets,
   createBudget,
+  updateBudget,
 } from "../services/api";
 import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
@@ -15,7 +16,7 @@ import Modal from "../components/Modal";
 
 const BudgetsPage = () => {
   const { user } = useUser();
-  const { getToken, isLoaded, isSignedIn } = useAuth();
+  const { getToken, isLoaded, isSignedIn, session } = useAuth();
   const { permissions } = usePermissions();
   const {
     isAIChatOpen,
@@ -27,7 +28,16 @@ const BudgetsPage = () => {
   const [budgets, setBudgets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedBudget, setSelectedBudget] = useState(null);
   const [newBudget, setNewBudget] = useState({
+    category: "",
+    budgetAmount: "",
+    period: "monthly",
+    startDate: "",
+    endDate: "",
+  });
+  const [editBudget, setEditBudget] = useState({
     category: "",
     budgetAmount: "",
     period: "monthly",
@@ -44,16 +54,56 @@ const BudgetsPage = () => {
     toggleAIChatCollapse();
   };
 
+  const openEditModal = (budget) => {
+    setSelectedBudget(budget);
+    setEditBudget({
+      category: budget.category || "",
+      budgetAmount: budget.budgetAmount ?? "",
+      period: budget.period || "monthly",
+      startDate: budget.startDate
+        ? new Date(budget.startDate).toISOString().slice(0, 10)
+        : "",
+      endDate: budget.endDate
+        ? new Date(budget.endDate).toISOString().slice(0, 10)
+        : "",
+    });
+    setShowEditModal(true);
+    setError(null);
+  };
+
   const handleCreateBudget = async (e) => {
     e.preventDefault();
     if (!isLoaded || !isSignedIn) return;
 
+    // Client-side validation
+    const amountNum = Number(newBudget.budgetAmount);
+    if (!newBudget.category.trim()) {
+      setError("Category is required");
+      return;
+    }
+    if (!amountNum || amountNum <= 0) {
+      setError("Budget amount must be a positive number");
+      return;
+    }
+    if (!newBudget.startDate || !newBudget.endDate) {
+      setError("Start and end dates are required");
+      return;
+    }
+    if (new Date(newBudget.endDate) < new Date(newBudget.startDate)) {
+      setError("End date must be after start date");
+      return;
+    }
+
+    setLoading(true);
     try {
-      const token = await getToken();
+      const token = session ? await session.getToken() : await getToken();
       const authApi = createAuthenticatedApi(() => Promise.resolve(token));
       const response = await createBudget(authApi, newBudget);
-      if (response.data.success) {
-        setBudgets([...budgets, response.data.data]);
+
+      if (response.data?.success) {
+        // Refetch budgets to ensure aggregates are correct
+        const refreshed = await fetchBudgets(authApi);
+        setBudgets(refreshed.data?.data || []);
         setShowCreateModal(false);
         setNewBudget({
           category: "",
@@ -64,11 +114,65 @@ const BudgetsPage = () => {
         });
         setError(null);
       } else {
-        setError("Failed to create budget");
+        setError(response.data?.message || "Failed to create budget");
       }
     } catch (err) {
       console.error("Create budget error:", err);
-      setError("Failed to create budget");
+      const serverMsg = err?.response?.data?.message || err?.message;
+      setError(serverMsg || "Failed to create budget");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateBudget = async (e) => {
+    e.preventDefault();
+    if (!isLoaded || !isSignedIn || !selectedBudget?.id) return;
+
+    // Client-side validation
+    const amountNum = Number(editBudget.budgetAmount);
+    if (!editBudget.category.trim()) {
+      setError("Category is required");
+      return;
+    }
+    if (!amountNum || amountNum <= 0) {
+      setError("Budget amount must be a positive number");
+      return;
+    }
+    if (!editBudget.startDate || !editBudget.endDate) {
+      setError("Start and end dates are required");
+      return;
+    }
+    if (new Date(editBudget.endDate) < new Date(editBudget.startDate)) {
+      setError("End date must be after start date");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const token = session ? await session.getToken() : await getToken();
+      const authApi = createAuthenticatedApi(() => Promise.resolve(token));
+      const payload = {
+        ...editBudget,
+        budgetAmount: amountNum,
+      };
+      const response = await updateBudget(authApi, selectedBudget.id, payload);
+
+      if (response.data?.success) {
+        const refreshed = await fetchBudgets(authApi);
+        setBudgets(refreshed.data?.data || []);
+        setShowEditModal(false);
+        setSelectedBudget(null);
+        setError(null);
+      } else {
+        setError(response.data?.message || "Failed to update budget");
+      }
+    } catch (err) {
+      console.error("Update budget error:", err);
+      const serverMsg = err?.response?.data?.message || err?.message;
+      setError(serverMsg || "Failed to update budget");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -90,7 +194,7 @@ const BudgetsPage = () => {
       setLoading(true);
       try {
         console.log("BudgetsPage: Fetching budget data...");
-        const token = await getToken();
+        const token = session ? await session.getToken() : await getToken();
         console.log("BudgetsPage: Got token:", token ? "✓" : "✗");
 
         const authApi = createAuthenticatedApi(() => Promise.resolve(token));
@@ -118,7 +222,7 @@ const BudgetsPage = () => {
     };
 
     fetchBudgetData();
-  }, [isLoaded, isSignedIn, getToken]);
+  }, [isLoaded, isSignedIn, getToken, session]);
 
   // Add early return for authentication states
   if (!isLoaded) {
@@ -141,7 +245,7 @@ const BudgetsPage = () => {
     );
   }
 
-  if (loading) {
+  if (loading && !showCreateModal) {
     return (
       <div className="flex h-screen bg-black relative">
         <Sidebar
@@ -381,12 +485,12 @@ const BudgetsPage = () => {
                   <h2 className="text-xl font-medium text-white">
                     Budget Categories
                   </h2>
-                  <button
+                  {/* <button
                     onClick={() => setShowCreateModal(true)}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 font-medium transition-colors"
                   >
                     Create Budget
-                  </button>
+                  </button> */}
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -476,7 +580,10 @@ const BudgetsPage = () => {
                               {new Date(budget.startDate).toLocaleDateString()}{" "}
                               - {new Date(budget.endDate).toLocaleDateString()}
                             </span>
-                            <button className="text-emerald-400 hover:text-emerald-300 text-sm font-medium">
+                            <button
+                              className="text-emerald-400 hover:text-emerald-300 text-sm font-medium"
+                              onClick={() => openEditModal(budget)}
+                            >
                               Edit Budget
                             </button>
                           </div>
@@ -725,6 +832,135 @@ const BudgetsPage = () => {
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
               >
                 {loading ? "Creating..." : "Create Budget"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {showEditModal && (
+        <Modal title="Edit Budget" onClose={() => setShowEditModal(false)}>
+          <form onSubmit={handleUpdateBudget}>
+            {error && (
+              <div className="mb-4 p-3 bg-red-900/20 border border-red-800 text-red-300 rounded">
+                {error}
+              </div>
+            )}
+
+            <div className="mb-4">
+              <label
+                htmlFor="edit_category"
+                className="block text-sm font-medium text-gray-300 mb-2"
+              >
+                Category *
+              </label>
+              <input
+                type="text"
+                id="edit_category"
+                required
+                value={editBudget.category}
+                onChange={(e) =>
+                  setEditBudget({ ...editBudget, category: e.target.value })
+                }
+                className="block w-full px-3 py-2 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg focus:ring-emerald-500 focus:border-emerald-500 placeholder-gray-400"
+              />
+            </div>
+
+            <div className="mb-4">
+              <label
+                htmlFor="edit_amount"
+                className="block text-sm font-medium text-gray-300 mb-2"
+              >
+                Budget Amount (₹) *
+              </label>
+              <input
+                type="number"
+                id="edit_amount"
+                required
+                min="1"
+                value={editBudget.budgetAmount}
+                onChange={(e) =>
+                  setEditBudget({ ...editBudget, budgetAmount: e.target.value })
+                }
+                className="block w-full px-3 py-2 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg focus:ring-emerald-500 focus:border-emerald-500 placeholder-gray-400"
+              />
+            </div>
+
+            <div className="mb-4">
+              <label
+                htmlFor="edit_period"
+                className="block text-sm font-medium text-gray-300 mb-2"
+              >
+                Period
+              </label>
+              <select
+                id="edit_period"
+                value={editBudget.period}
+                onChange={(e) =>
+                  setEditBudget({ ...editBudget, period: e.target.value })
+                }
+                className="block w-full px-3 py-2 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+              >
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+                <option value="yearly">Yearly</option>
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div>
+                <label
+                  htmlFor="edit_start"
+                  className="block text-sm font-medium text-gray-300 mb-2"
+                >
+                  Start Date *
+                </label>
+                <input
+                  type="date"
+                  id="edit_start"
+                  required
+                  value={editBudget.startDate}
+                  onChange={(e) =>
+                    setEditBudget({ ...editBudget, startDate: e.target.value })
+                  }
+                  className="block w-full px-3 py-2 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="edit_end"
+                  className="block text-sm font-medium text-gray-300 mb-2"
+                >
+                  End Date *
+                </label>
+                <input
+                  type="date"
+                  id="edit_end"
+                  required
+                  value={editBudget.endDate}
+                  onChange={(e) =>
+                    setEditBudget({ ...editBudget, endDate: e.target.value })
+                  }
+                  className="block w-full px-3 py-2 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => setShowEditModal(false)}
+                className="px-4 py-2 text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+              >
+                {loading ? "Saving..." : "Save Changes"}
               </button>
             </div>
           </form>
