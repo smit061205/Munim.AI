@@ -152,6 +152,22 @@ class DataService {
     }
   }
 
+  // Check if user has permission to access a specific category
+  static async hasPermission(userId, category) {
+    try {
+      console.log(
+        `🔐 DataService.hasPermission called for userId: ${userId}, category: ${category}`
+      );
+
+      // For now, return true for all categories since permissions are handled at the route level
+      // This can be extended later to implement more granular permissions
+      return true;
+    } catch (error) {
+      console.error(`❌ Error checking permission for ${category}:`, error);
+      return false;
+    }
+  }
+
   // Load all user data from all categories
   static async loadAllUserData(userId) {
     console.log(`📋 DataService.loadAllUserData called for userId: ${userId}`);
@@ -184,7 +200,7 @@ class DataService {
           continue;
         }
 
-        const data = await this.loadData(category, userId, true); // Skip permission check since we already checked
+        const data = await this.loadData(category, userId); // Skip permission check since we already checked
 
         if (data) {
           result[category] = data;

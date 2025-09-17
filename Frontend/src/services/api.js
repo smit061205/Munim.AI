@@ -300,6 +300,54 @@ export const fetchAllowedData = async (authApi, allowedCategories) => {
   return data;
 };
 
+// Data ingestion API
+export const ingestExcelData = async (
+  getToken,
+  file,
+  target = "transactions"
+) => {
+  try {
+    console.log("📤 Ingesting Excel data:", file.name);
+    const token = await getToken();
+
+    const formData = new FormData();
+    formData.append("files", file);
+
+    const response = await fetch(
+      `${API_BASE_URL}/ingest/excel?target=${target}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      }
+    );
+
+    const result = await response.json();
+
+    if (response.ok && result.success) {
+      console.log("✅ Excel data ingested successfully:", result);
+      return {
+        success: true,
+        data: result,
+      };
+    } else {
+      console.error("❌ Excel ingestion failed:", result);
+      return {
+        success: false,
+        error: result.message || "Upload failed",
+      };
+    }
+  } catch (error) {
+    console.error("❌ Excel ingestion error:", error);
+    return {
+      success: false,
+      error: error.message || "Network error",
+    };
+  }
+};
+
 // Account API functions (require authentication)
 export const getAccounts = (authApi) => {
   return authApi.get("/account");
