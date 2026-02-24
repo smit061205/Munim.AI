@@ -11,8 +11,8 @@ class LLMService {
     this.groq = new Groq({
       apiKey: process.env.GROQ_API_KEY,
     });
-    this.model = "llama-3.1-8b-instant"; // Fast, reliable primary model
-    this.fallbackModel = "mixtral-8x7b-32768"; // Larger context fallback
+    this.model = "llama-3.3-70b-versatile"; // Has higher token limit
+    this.fallbackModel = "llama-3.1-8b-instant"; // Fallback
     // Conversation memory storage
     this.conversationMemory = new Map(); // userId -> { count, history }
     this.MAX_HISTORY = 50; // cap per-user history to avoid unbounded growth
@@ -55,7 +55,7 @@ class LLMService {
     const delay = Math.min(
       this.retryConfig.baseDelay *
         Math.pow(this.retryConfig.backoffMultiplier, attempt),
-      this.retryConfig.maxDelay
+      this.retryConfig.maxDelay,
     );
     // Add jitter to prevent thundering herd
     return delay + Math.random() * 1000;
@@ -82,7 +82,7 @@ class LLMService {
     return retryableErrors.some(
       (retryableError) =>
         errorMessage.includes(retryableError) ||
-        errorCode.includes(retryableError)
+        errorCode.includes(retryableError),
     );
   }
 
@@ -95,7 +95,7 @@ class LLMService {
         console.log(
           `🔄 Attempting API call (${model}, attempt ${attempt + 1}/${
             this.retryConfig.maxRetries + 1
-          })`
+          })`,
         );
 
         const result = await this.groq.chat.completions.create({
@@ -107,11 +107,11 @@ class LLMService {
           ],
           model: model,
           temperature: 0.7,
-          max_tokens: 2048,
+          max_tokens: 1024,
         });
 
         console.log(
-          `✅ API call successful with ${model} on attempt ${attempt + 1}`
+          `✅ API call successful with ${model} on attempt ${attempt + 1}`,
         );
         return result;
       } catch (error) {
@@ -121,7 +121,7 @@ class LLMService {
             error: error.message,
             code: error.code,
             isRetryable: this.isRetryableError(error),
-          }
+          },
         );
 
         // If this is the last attempt or error is not retryable, throw the error
@@ -458,7 +458,7 @@ Please provide a helpful but CONCISE financial response:`;
         sheets: Object.keys(result),
         totalRows: Object.values(result).reduce(
           (sum, sheet) => sum + sheet.rowCount,
-          0
+          0,
         ),
       });
 
@@ -501,7 +501,7 @@ Please provide a helpful but CONCISE financial response:`;
         ) {
           const excelData = this.convertExcelToJson(
             fileBuffer,
-            file.originalname
+            file.originalname,
           );
           if (excelData) {
             // Include Excel data in prompt text instead of as file attachment
@@ -509,7 +509,7 @@ Please provide a helpful but CONCISE financial response:`;
             fileContext += `Data Content:\n${JSON.stringify(
               excelData,
               null,
-              2
+              2,
             )}\n`;
 
             // Collect metadata for UI confirmation
@@ -520,7 +520,7 @@ Please provide a helpful but CONCISE financial response:`;
                 Object.entries(excelData).map(([sheet, obj]) => [
                   sheet,
                   obj.rowCount || (obj.data ? obj.data.length : 0),
-                ])
+                ]),
               ),
             });
 
@@ -528,7 +528,7 @@ Please provide a helpful but CONCISE financial response:`;
             parsedExcelData.push({ name: file.originalname, data: excelData });
 
             console.log(
-              `📊 Added Excel data to prompt context: ${file.originalname}`
+              `📊 Added Excel data to prompt context: ${file.originalname}`,
             );
           }
         } else {
@@ -542,7 +542,7 @@ Please provide a helpful but CONCISE financial response:`;
         }
 
         console.log(
-          `📎 Processed file: ${file.originalname} (${mimeType}, ${file.size} bytes)`
+          `📎 Processed file: ${file.originalname} (${mimeType}, ${file.size} bytes)`,
         );
       } catch (error) {
         console.error(`❌ Error processing file ${file.originalname}:`, error);
@@ -558,6 +558,7 @@ Please provide a helpful but CONCISE financial response:`;
     // In production, this would check against a database or permission system
     const allowedUsers = [
       "user_32eIuzzFAAlZ1JzWbY3Cp7ZBSzr", // Current user
+      "user_32dTvEx6MFVPV48xQI7evNjRgGB", // Newly added user
       // Add more user IDs as needed
     ];
 
@@ -602,7 +603,7 @@ Please provide a helpful but CONCISE financial response:`;
       }
 
       console.log(
-        `🔑 Using Groq API key: ${process.env.GROQ_API_KEY.substring(0, 10)}...`
+        `🔑 Using Groq API key: ${process.env.GROQ_API_KEY.substring(0, 10)}...`,
       );
 
       const { fileContext, parsedExcelMeta, parsedExcelData } =
@@ -635,7 +636,7 @@ Please provide a helpful but CONCISE financial response:`;
           });
           ingestionResult = await IngestService.ingestTransactions(
             userId,
-            parsed
+            parsed,
           );
           console.log("🟢 Ingestion completed:", ingestionResult);
         } catch (ingErr) {
@@ -659,7 +660,7 @@ Please provide a helpful but CONCISE financial response:`;
             ? `\n\nSYSTEM NOTE: ${
                 ingestionResult.inserted || 0
               } expense rows were imported from the uploaded Excel.`
-            : "")
+            : ""),
       );
 
       console.log(`📤 Sending prompt to Groq:`, {
@@ -676,7 +677,7 @@ Please provide a helpful but CONCISE financial response:`;
       } catch (primaryError) {
         console.warn(
           `⚠️ Primary model (${this.model}) failed after retries:`,
-          primaryError.message
+          primaryError.message,
         );
 
         try {
@@ -736,12 +737,12 @@ Please provide a helpful but CONCISE financial response:`;
         "development",
       ];
       const hasInappropriateContent = inappropriateTerms.some((term) =>
-        text.toLowerCase().includes(term.toLowerCase())
+        text.toLowerCase().includes(term.toLowerCase()),
       );
 
       if (hasInappropriateContent) {
         console.warn(
-          `⚠️ Response contains inappropriate technical terms, filtering...`
+          `⚠️ Response contains inappropriate technical terms, filtering...`,
         );
         return {
           success: false,
