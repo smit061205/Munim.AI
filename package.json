@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node server/server.js",
     "dev": "nodemon server/server.js",
+    "postinstall": "cd server && npm install",
     "test": "node server/scripts/testEndpoints.js",
     "test:endpoints": "node server/scripts/testEndpoints.js",
     "test:permissions": "node server/scripts/validatePermissions.js"
