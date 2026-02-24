@@ -16,10 +16,11 @@ const handleDataRequest = (category) => {
     const data = await DataService.loadData(category, clerkId);
 
     if (data === null) {
-      return res.status(403).json({
-        status: "error",
-        message: `Access denied for ${category} data`,
+      return res.json({
+        status: "success",
+        data: category === "transactions" ? [] : {},
         category,
+        count: 0,
         timestamp: new Date().toISOString(),
       });
     }
@@ -60,7 +61,7 @@ router.get(
       categories,
       timestamp: new Date().toISOString(),
     });
-  })
+  }),
 );
 
 // Health check endpoint
