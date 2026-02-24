@@ -26,7 +26,7 @@ class DataService {
   static async loadData(category, userId) {
     try {
       console.log(
-        `🔍 DataService.loadData called for category: ${category}, userId: ${userId}`
+        `🔍 DataService.loadData called for category: ${category}, userId: ${userId}`,
       );
 
       const Model = this.getModelByCategory(category);
@@ -36,7 +36,7 @@ class DataService {
       }
 
       console.log(
-        `🔎 Querying MongoDB with filter: { clerkId: "${userId}" } for model: ${Model.modelName}`
+        `🔎 Querying MongoDB with filter: { clerkId: "${userId}" } for model: ${Model.modelName}`,
       );
       const data = await Model.findOne({ clerkId: userId });
 
@@ -57,7 +57,7 @@ class DataService {
     } catch (error) {
       console.error(
         `❌ Error loading ${category} data for userId ${userId}:`,
-        error
+        error,
       );
       throw error;
     }
@@ -67,7 +67,7 @@ class DataService {
   static async loadAllowedData(userId, allowedCategories) {
     try {
       console.log(
-        `🔍 DataService.loadAllowedData called for userId: ${userId}`
+        `🔍 DataService.loadAllowedData called for userId: ${userId}`,
       );
       console.log(`📋 Allowed categories: [${allowedCategories.join(", ")}]`);
 
@@ -95,7 +95,7 @@ class DataService {
     } catch (error) {
       console.error(
         `❌ Error loading allowed data for userId ${userId}:`,
-        error
+        error,
       );
       throw error;
     }
@@ -105,7 +105,7 @@ class DataService {
   static async getUserData(category, userId) {
     try {
       console.log(
-        `📊 DataService.getUserData called for category: ${category}, userId: ${userId}`
+        `📊 DataService.getUserData called for category: ${category}, userId: ${userId}`,
       );
 
       const data = await this.loadData(category, userId);
@@ -125,7 +125,7 @@ class DataService {
     } catch (error) {
       console.error(
         `❌ Error in DataService.getUserData for category ${category}:`,
-        error
+        error,
       );
       throw error;
     }
@@ -156,7 +156,7 @@ class DataService {
   static async hasPermission(userId, category) {
     try {
       console.log(
-        `🔐 DataService.hasPermission called for userId: ${userId}, category: ${category}`
+        `🔐 DataService.hasPermission called for userId: ${userId}, category: ${category}`,
       );
 
       // For now, return true for all categories since permissions are handled at the route level
@@ -262,21 +262,21 @@ class DataService {
             currentValue: acc.balance, // Fix: use 'balance' from JSON
             type: acc.type,
             name: acc.bank_name,
-          })) || []
+          })) || [],
       ),
       ...assetsArray.flatMap(
         (doc) =>
           doc.real_estate?.map((re) => ({
             currentValue: re.current_value, // This is correct
             type: re.type,
-          })) || []
+          })) || [],
       ),
       ...assetsArray.flatMap(
         (doc) =>
           doc.vehicles?.map((v) => ({
             currentValue: v.current_value, // This is correct
             type: v.type,
-          })) || []
+          })) || [],
       ),
     ];
 
@@ -284,7 +284,7 @@ class DataService {
       totalAssets: processedAssets.length,
       totalValue: processedAssets.reduce(
         (sum, asset) => sum + asset.currentValue,
-        0
+        0,
       ),
       sample: processedAssets[0],
     });
@@ -294,20 +294,24 @@ class DataService {
   static async getLiabilities(clerkId) {
     console.log("💳 DataService.getLiabilities called");
     const data = await this.getUserData("liabilities", clerkId);
-    const processedLiabilities = data.flatMap(
+
+    // data could be an object (single doc) or empty — ensure it's iterable
+    const dataArray = Array.isArray(data) ? data : data ? [data] : [];
+
+    const processedLiabilities = dataArray.flatMap(
       (doc) =>
         doc.liabilities?.map((liability) => ({
           currentBalance: liability.remaining_balance,
           type: liability.liability_type,
           monthlyPayment: liability.monthly_installment,
-        })) || []
+        })) || [],
     );
 
     console.log(`💳 Processed liabilities:`, {
       totalLiabilities: processedLiabilities.length,
       totalValue: processedLiabilities.reduce(
-        (sum, liability) => sum + liability.currentBalance,
-        0
+        (sum, liability) => sum + (liability.currentBalance || 0),
+        0,
       ),
       sample: processedLiabilities[0],
     });
@@ -391,7 +395,7 @@ class DataService {
       totalInvestments: processedInvestments.length,
       totalValue: processedInvestments.reduce(
         (sum, investment) => sum + investment.currentValue,
-        0
+        0,
       ),
       sample: processedInvestments[0],
     });
