@@ -72,7 +72,9 @@ const PermissionsManager = ({ isOpen, onClose }) => {
       setError(null);
 
       const token = await getToken();
-      const response = await fetch("http://localhost:5001/api/permissions", {
+      const API_URL =
+        import.meta.env.VITE_API_URL || "http://localhost:5001/api";
+      const response = await fetch(`${API_URL}/permissions`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -100,7 +102,9 @@ const PermissionsManager = ({ isOpen, onClose }) => {
       setError(null);
 
       const token = await getToken();
-      const response = await fetch("http://localhost:5001/api/permissions", {
+      const API_URL =
+        import.meta.env.VITE_API_URL || "http://localhost:5001/api";
+      const response = await fetch(`${API_URL}/permissions`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${token}`,

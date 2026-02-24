@@ -32,13 +32,14 @@ const app = express();
 // CORS configuration
 const corsOptions = {
   origin: [
+    process.env.FRONTEND_URL, // Production frontend
     "http://localhost:5173", // Vite dev server
     "http://localhost:5174", // Alternative Vite dev server port
     "http://localhost:3000", // Alternative React dev server
     "http://127.0.0.1:5173",
     "http://127.0.0.1:5174",
     "http://127.0.0.1:3000",
-  ],
+  ].filter(Boolean), // Filter out undefined if env var is missing
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: [

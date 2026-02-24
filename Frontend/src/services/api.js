@@ -1,6 +1,7 @@
 import axios from "axios";
 
-const API_BASE_URL = "http://localhost:5001/api";
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:5001/api";
 
 // Create basic axios instance without auth interceptor
 const api = axios.create({
@@ -18,7 +19,7 @@ api.interceptors.response.use(
       console.error("Unauthorized access - redirecting to login");
     }
     return Promise.reject(error);
-  }
+  },
 );
 
 // Helper function to create authenticated API client
@@ -72,7 +73,7 @@ export const updateBudgetSpending = (authApi, spendingData) =>
 export const fetchDashboard = async (authApi, categories = []) => {
   console.log(
     "🎯 API Service: fetchDashboard called with categories:",
-    categories
+    categories,
   );
 
   const response = await authApi.get("/dashboard/", {
@@ -92,7 +93,7 @@ export const fetchDashboard = async (authApi, categories = []) => {
 export const fetchMonthlySpending = async (authApi, categories = []) => {
   console.log(
     "📅 API Service: fetchMonthlySpending called with categories:",
-    categories
+    categories,
   );
 
   const response = await authApi.get("/dashboard/monthly-spending", {
@@ -124,7 +125,7 @@ export const fetchCreditScoreHistory = (authApi, categories = []) => {
 export const fetchNetWorthTimeline = async (authApi, categories = []) => {
   console.log(
     "💰 API Service: fetchNetWorthTimeline called with categories:",
-    categories
+    categories,
   );
 
   const response = await authApi.get("/dashboard/net-worth", {
@@ -138,7 +139,7 @@ export const fetchNetWorthTimeline = async (authApi, categories = []) => {
 export const fetchSpendingCategories = async (authApi, categories = []) => {
   console.log(
     "🏷️ API Service: fetchSpendingCategories called with categories:",
-    categories
+    categories,
   );
 
   const response = await authApi.get("/dashboard/spending-categories", {
@@ -192,7 +193,7 @@ export const fetchAnalyticsSummary = (authApi, categories = []) => {
 export const fetchCategoryFilteredAnalytics = (
   authApi,
   allowedCategories,
-  analysisType
+  analysisType,
 ) =>
   authApi.post("/analytics/category-filter", {
     allowedCategories,
@@ -242,7 +243,7 @@ export const fetchAllowedData = async (authApi, allowedCategories) => {
         .catch((err) => {
           console.error("Error fetching assets:", err);
           data.assets = [];
-        })
+        }),
     );
   }
   if (allowedCategories.includes("liabilities")) {
@@ -252,7 +253,7 @@ export const fetchAllowedData = async (authApi, allowedCategories) => {
         .catch((err) => {
           console.error("Error fetching liabilities:", err);
           data.liabilities = [];
-        })
+        }),
     );
   }
   if (allowedCategories.includes("transactions")) {
@@ -262,7 +263,7 @@ export const fetchAllowedData = async (authApi, allowedCategories) => {
         .catch((err) => {
           console.error("Error fetching transactions:", err);
           data.transactions = [];
-        })
+        }),
     );
   }
   if (allowedCategories.includes("epf")) {
@@ -272,7 +273,7 @@ export const fetchAllowedData = async (authApi, allowedCategories) => {
         .catch((err) => {
           console.error("Error fetching EPF:", err);
           data.epf = [];
-        })
+        }),
     );
   }
   if (allowedCategories.includes("creditScore")) {
@@ -282,7 +283,7 @@ export const fetchAllowedData = async (authApi, allowedCategories) => {
         .catch((err) => {
           console.error("Error fetching credit score:", err);
           data.creditScore = [];
-        })
+        }),
     );
   }
   if (allowedCategories.includes("investments")) {
@@ -292,7 +293,7 @@ export const fetchAllowedData = async (authApi, allowedCategories) => {
         .catch((err) => {
           console.error("Error fetching investments:", err);
           data.investments = [];
-        })
+        }),
     );
   }
 
@@ -304,7 +305,7 @@ export const fetchAllowedData = async (authApi, allowedCategories) => {
 export const ingestExcelData = async (
   getToken,
   file,
-  target = "transactions"
+  target = "transactions",
 ) => {
   try {
     console.log("📤 Ingesting Excel data:", file.name);
@@ -321,7 +322,7 @@ export const ingestExcelData = async (
           Authorization: `Bearer ${token}`,
         },
         body: formData,
-      }
+      },
     );
 
     const result = await response.json();
@@ -395,7 +396,7 @@ export const updateInvestment = (
   authApi,
   type,
   investmentId,
-  investmentData
+  investmentData,
 ) => {
   return authApi.put(`/investment/${type}/${investmentId}`, investmentData);
 };

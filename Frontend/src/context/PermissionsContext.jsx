@@ -33,7 +33,9 @@ export const PermissionsProvider = ({ children }) => {
 
     try {
       const token = await session.getToken();
-      const response = await fetch("http://localhost:5001/api/permissions", {
+      const API_URL =
+        import.meta.env.VITE_API_URL || "http://localhost:5001/api";
+      const response = await fetch(`${API_URL}/permissions`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -63,17 +65,16 @@ export const PermissionsProvider = ({ children }) => {
 
     try {
       const token = await session.getToken();
-      const response = await fetch(
-        "http://localhost:5001/api/permissions/bulk",
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ permissions: newPermissions }),
-        }
-      );
+      const API_URL =
+        import.meta.env.VITE_API_URL || "http://localhost:5001/api";
+      const response = await fetch(`${API_URL}/permissions/bulk`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ permissions: newPermissions }),
+      });
 
       if (!response.ok) {
         throw new Error("Failed to update permissions");
