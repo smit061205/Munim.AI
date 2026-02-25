@@ -20,6 +20,7 @@ const ReportsPage = () => {
   } = useAIChat();
   const [selectedPeriod, setSelectedPeriod] = useState("monthly");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [creditScoreData, setCreditScoreData] = useState(null);
@@ -74,13 +75,13 @@ const ReportsPage = () => {
           authApi.get(`/dashboard?categories=${allowedCategories.join(",")}`),
           authApi.get(
             `/dashboard/monthly-spending?categories=${allowedCategories.join(
-              ","
-            )}`
+              ",",
+            )}`,
           ),
           authApi.get(
             `/dashboard/spending-categories?categories=${allowedCategories.join(
-              ","
-            )}`
+              ",",
+            )}`,
           ),
           authApi.get("/data/credit-score"),
         ]);
@@ -89,7 +90,7 @@ const ReportsPage = () => {
         console.log("📊 Monthly spending response:", monthlySpendingResponse);
         console.log(
           "📊 Spending categories response:",
-          spendingCategoriesResponse
+          spendingCategoriesResponse,
         );
         console.log("📊 Credit score response:", creditScoreResponse);
 
@@ -115,7 +116,7 @@ const ReportsPage = () => {
         if (spendingCategoriesResponse.status === "fulfilled") {
           console.log(
             "✅ Categories data:",
-            spendingCategoriesResponse.value.data
+            spendingCategoriesResponse.value.data,
           );
           const categoriesData = spendingCategoriesResponse.value.data.data;
           if (
@@ -136,7 +137,7 @@ const ReportsPage = () => {
         } else {
           console.log(
             "❌ Categories request failed:",
-            spendingCategoriesResponse.reason
+            spendingCategoriesResponse.reason,
           );
         }
 
@@ -152,12 +153,12 @@ const ReportsPage = () => {
               creditData.credit_score >= 800
                 ? "Excellent"
                 : creditData.credit_score >= 740
-                ? "Very Good"
-                : creditData.credit_score >= 670
-                ? "Good"
-                : creditData.credit_score >= 580
-                ? "Fair"
-                : "Poor",
+                  ? "Very Good"
+                  : creditData.credit_score >= 670
+                    ? "Good"
+                    : creditData.credit_score >= 580
+                      ? "Fair"
+                      : "Poor",
             creditAge: creditData.credit_age || 24, // Default to 24 months if not provided
           };
           console.log("🎯 Mapped credit score data:", mappedCreditData);
@@ -165,7 +166,7 @@ const ReportsPage = () => {
         } else {
           console.log(
             "❌ Credit score request failed:",
-            creditScoreResponse.reason
+            creditScoreResponse.reason,
           );
         }
 
@@ -222,7 +223,7 @@ const ReportsPage = () => {
       button.textContent = originalText;
       button.disabled = false;
       alert(
-        `Report "${reportName}" generated successfully! Check your downloads folder.`
+        `Report "${reportName}" generated successfully! Check your downloads folder.`,
       );
     }, 2000);
   };
@@ -242,16 +243,19 @@ const ReportsPage = () => {
         isAIChatOpen={isAIChatOpen}
         isCollapsed={isSidebarCollapsed}
         setIsCollapsed={setIsSidebarCollapsed}
+        isMobileOpen={isMobileSidebarOpen}
+        setIsMobileOpen={setIsMobileSidebarOpen}
       />
 
       <div className="flex-1 overflow-auto bg-black">
         <Navbar
           title="Reports"
           subtitle="Generate comprehensive financial reports and insights."
+          onMenuClick={() => setIsMobileSidebarOpen(true)}
         />
 
         {/* Content */}
-        <div className="p-8 bg-black">
+        <div className="p-4 md:p-8 bg-black">
           {/* Report Controls */}
           {/* <div className="mb-8">
             <div className="bg-gray-950 p-6 border border-gray-800 shadow-xl">
@@ -298,7 +302,7 @@ const ReportsPage = () => {
 
           {/* Key Metrics */}
           <div className="mb-8">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
               <div className="bg-gray-950 p-6 border border-gray-800 shadow-xl">
                 <h3 className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
                   Total Income
@@ -310,8 +314,8 @@ const ReportsPage = () => {
                   {selectedPeriod === "monthly"
                     ? "This month"
                     : selectedPeriod === "quarterly"
-                    ? "Last 3 months"
-                    : "This year"}
+                      ? "Last 3 months"
+                      : "This year"}
                 </p>
               </div>
               <div className="bg-gray-950 p-6 border border-gray-800 shadow-xl">
@@ -323,7 +327,7 @@ const ReportsPage = () => {
                 </p>
                 <p className="text-gray-400 text-sm">
                   {((currentData.expenses / currentData.income) * 100).toFixed(
-                    1
+                    1,
                   )}
                   % of income
                 </p>

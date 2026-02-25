@@ -28,6 +28,7 @@ const DashboardPage = () => {
     toggleAIChatCollapse,
   } = useAIChat();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [dashboardData, setDashboardData] = useState(null);
   const [monthlySpending, setMonthlySpending] = useState(null);
   const [netWorthData, setNetWorthData] = useState(null);
@@ -47,28 +48,28 @@ const DashboardPage = () => {
         startDate = new Date(
           now.getFullYear(),
           now.getMonth() - 1,
-          now.getDate()
+          now.getDate(),
         );
         break;
       case "3M":
         startDate = new Date(
           now.getFullYear(),
           now.getMonth() - 3,
-          now.getDate()
+          now.getDate(),
         );
         break;
       case "1Y":
         startDate = new Date(
           now.getFullYear() - 1,
           now.getMonth(),
-          now.getDate()
+          now.getDate(),
         );
         break;
       default:
         startDate = new Date(
           now.getFullYear(),
           now.getMonth() - 1,
-          now.getDate()
+          now.getDate(),
         );
     }
 
@@ -77,12 +78,12 @@ const DashboardPage = () => {
       expenses: Array.isArray(data.expenses)
         ? data.expenses.filter((item) => new Date(item.date) >= startDate)
         : data.expenses?.monthlyData?.filter(
-            (item) => new Date(item.month) >= startDate
+            (item) => new Date(item.month) >= startDate,
           ) || [],
       netWorth: Array.isArray(data.netWorth)
         ? data.netWorth.filter((item) => new Date(item.date) >= startDate)
         : data.netWorth?.monthlyData?.filter(
-            (item) => new Date(item.month) >= startDate
+            (item) => new Date(item.month) >= startDate,
           ) || [],
       transactions: Array.isArray(data.transactions)
         ? data.transactions.filter((item) => new Date(item.date) >= startDate)
@@ -104,7 +105,7 @@ const DashboardPage = () => {
 
         console.log(
           "🔍 Fetching dashboard data with categories:",
-          allowedCategories
+          allowedCategories,
         );
 
         // Fetch data from multiple endpoints
@@ -130,7 +131,7 @@ const DashboardPage = () => {
         if (monthlySpendingResponse.status === "fulfilled") {
           console.log(
             "✅ Monthly spending data:",
-            monthlySpendingResponse.value.data
+            monthlySpendingResponse.value.data,
           );
           setMonthlySpending(monthlySpendingResponse.value.data.data);
         }
@@ -145,7 +146,7 @@ const DashboardPage = () => {
         if (spendingCategoriesResponse.status === "fulfilled") {
           console.log(
             "✅ Spending categories data:",
-            spendingCategoriesResponse.value.data
+            spendingCategoriesResponse.value.data,
           );
           setSpendingCategories(spendingCategoriesResponse.value.data.data);
         }
@@ -229,6 +230,8 @@ const DashboardPage = () => {
           isAIChatOpen={isAIChatOpen}
           isCollapsed={isSidebarCollapsed}
           setIsCollapsed={setIsSidebarCollapsed}
+          isMobileOpen={isMobileSidebarOpen}
+          setIsMobileOpen={setIsMobileSidebarOpen}
         />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-white text-lg">Loading dashboard...</div>
@@ -244,12 +247,15 @@ const DashboardPage = () => {
         isAIChatOpen={isAIChatOpen}
         isCollapsed={isSidebarCollapsed}
         setIsCollapsed={setIsSidebarCollapsed}
+        isMobileOpen={isMobileSidebarOpen}
+        setIsMobileOpen={setIsMobileSidebarOpen}
       />
 
       <div className="flex-1 overflow-auto bg-black">
         <Navbar
           title="Dashboard"
           subtitle="Welcome back, here's an overview of your financial health."
+          onMenuClick={() => setIsMobileSidebarOpen(true)}
         />
 
         {error && (
@@ -259,11 +265,11 @@ const DashboardPage = () => {
         )}
 
         {/* Content */}
-        <div className="p-8 bg-black">
+        <div className="p-4 md:p-8 bg-black">
           {/* Overview Cards */}
           <div className="mb-8">
             <h2 className="text-xl font-medium text-white mb-6">Overview</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
               <div className="bg-gray-950 p-6 border border-gray-800 shadow-xl hover:shadow-2xl transition-all duration-300">
                 <h3 className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
                   Net Worth
@@ -442,7 +448,7 @@ const DashboardPage = () => {
                             <td className="px-6 py-4 text-gray-400 text-sm">
                               {transaction.date
                                 ? new Date(
-                                    transaction.date
+                                    transaction.date,
                                   ).toLocaleDateString()
                                 : "N/A"}
                             </td>

@@ -19,6 +19,7 @@ const TransactionsPage = () => {
     toggleAIChatCollapse,
   } = useAIChat();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState({
@@ -100,7 +101,7 @@ const TransactionsPage = () => {
     } catch (error) {
       console.error("Error creating transaction:", error);
       setCreateError(
-        error.response?.data?.message || "Failed to create transaction"
+        error.response?.data?.message || "Failed to create transaction",
       );
     } finally {
       setCreateLoading(false);
@@ -116,7 +117,7 @@ const TransactionsPage = () => {
 
       if (!isLoaded || !isSignedIn) {
         console.log(
-          "❌ Missing requirements: Clerk not loaded or user not signed in"
+          "❌ Missing requirements: Clerk not loaded or user not signed in",
         );
         return;
       }
@@ -210,7 +211,7 @@ const TransactionsPage = () => {
           const monthAgo = new Date(
             today.getFullYear(),
             today.getMonth() - 1,
-            today.getDate()
+            today.getDate(),
           );
           matchesDate = transactionDate >= monthAgo;
           break;
@@ -218,7 +219,7 @@ const TransactionsPage = () => {
           const yearAgo = new Date(
             today.getFullYear() - 1,
             today.getMonth(),
-            today.getDate()
+            today.getDate(),
           );
           matchesDate = transactionDate >= yearAgo;
           break;
@@ -250,16 +251,19 @@ const TransactionsPage = () => {
         isAIChatOpen={isAIChatOpen}
         isCollapsed={isSidebarCollapsed}
         setIsCollapsed={setIsSidebarCollapsed}
+        isMobileOpen={isMobileSidebarOpen}
+        setIsMobileOpen={setIsMobileSidebarOpen}
       />
 
       <div className="flex-1 overflow-auto bg-black">
         <Navbar
           title="Transactions"
           subtitle="View and manage all your financial transactions."
+          onMenuClick={() => setIsMobileSidebarOpen(true)}
         />
 
         {/* Content */}
-        <div className="flex-1 overflow-auto p-8">
+        <div className="flex-1 overflow-auto p-4 md:p-8">
           {/* Summary Cards */}
           <div className="mb-8">
             <div className="flex items-center justify-between mb-6">
@@ -273,7 +277,7 @@ const TransactionsPage = () => {
                 Add Transaction
               </button> */}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
               <div className="bg-gray-950 p-6 border border-gray-800 shadow-xl">
                 <h3 className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
                   Total Income

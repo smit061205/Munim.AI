@@ -19,6 +19,7 @@ const AccountsPage = () => {
     toggleAIChatCollapse,
   } = useAIChat();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -65,7 +66,7 @@ const AccountsPage = () => {
                   type: account.type || "checking",
                   balance: account.balance || 0,
                   accountNumber: `****${String(
-                    account.account_number || "0000"
+                    account.account_number || "0000",
                   ).slice(-4)}`,
                   bank: account.bank_name || "Unknown Bank",
                   status: "active",
@@ -116,7 +117,7 @@ const AccountsPage = () => {
         console.error("❌ Error fetching accounts:", error);
         console.error(
           "❌ Error details:",
-          error.response?.data || error.message
+          error.response?.data || error.message,
         );
       } finally {
         setLoading(false);
@@ -128,10 +129,10 @@ const AccountsPage = () => {
 
   const totalBalance = accounts.reduce(
     (sum, account) => sum + account.balance,
-    0
+    0,
   );
   const activeAccounts = accounts.filter(
-    (account) => account.status === "active"
+    (account) => account.status === "active",
   ).length;
   const creditBalance = accounts
     .filter((account) => account.type === "credit")
@@ -290,19 +291,22 @@ const AccountsPage = () => {
         setIsCollapsed={setIsSidebarCollapsed}
         onAIToggle={toggleAIChat}
         isAIChatOpen={isAIChatOpen}
+        isMobileOpen={isMobileSidebarOpen}
+        setIsMobileOpen={setIsMobileSidebarOpen}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <Navbar
           title="Accounts"
           subtitle="Manage and monitor all your financial accounts."
+          onMenuClick={() => setIsMobileSidebarOpen(true)}
         />
 
         {/* Content */}
-        <div className="flex-1 overflow-auto p-8">
+        <div className="flex-1 overflow-auto p-4 md:p-8">
           {/* Summary Cards */}
           <div className="mb-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
               <div className="bg-gray-950 p-6 border border-gray-800 shadow-xl">
                 <h3 className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
                   Total Balance
@@ -345,7 +349,7 @@ const AccountsPage = () => {
               </button> */}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
               {accounts.map((account) => (
                 <div
                   key={account.id}
@@ -423,11 +427,11 @@ const AccountsPage = () => {
                 {["checking", "savings", "credit", "investment", "fd"].map(
                   (type) => {
                     const typeAccounts = accounts.filter(
-                      (account) => account.type === type
+                      (account) => account.type === type,
                     );
                     const typeBalance = typeAccounts.reduce(
                       (sum, account) => sum + account.balance,
-                      0
+                      0,
                     );
 
                     return (
@@ -443,14 +447,14 @@ const AccountsPage = () => {
                         </p>
                         <p
                           className={`font-semibold ${getAccountTypeColor(
-                            type
+                            type,
                           )}`}
                         >
                           ₹{Math.abs(typeBalance).toLocaleString()}
                         </p>
                       </div>
                     );
-                  }
+                  },
                 )}
               </div>
             </div>

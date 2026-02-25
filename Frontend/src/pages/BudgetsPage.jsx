@@ -25,6 +25,7 @@ const BudgetsPage = () => {
     toggleAIChatCollapse,
   } = useAIChat();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [budgets, setBudgets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -207,7 +208,7 @@ const BudgetsPage = () => {
           setError(null);
           console.log(
             "BudgetsPage: Successfully set budgets:",
-            response.data.data
+            response.data.data,
           );
         } else {
           setError("Failed to load budget data");
@@ -253,6 +254,8 @@ const BudgetsPage = () => {
           isAIChatOpen={isAIChatOpen}
           isCollapsed={isSidebarCollapsed}
           setIsCollapsed={setIsSidebarCollapsed}
+          isMobileOpen={isMobileSidebarOpen}
+          setIsMobileOpen={setIsMobileSidebarOpen}
         />
         <div className="flex-1 overflow-auto bg-black">
           <Navbar
@@ -277,6 +280,8 @@ const BudgetsPage = () => {
           isAIChatOpen={isAIChatOpen}
           isCollapsed={isSidebarCollapsed}
           setIsCollapsed={setIsSidebarCollapsed}
+          isMobileOpen={isMobileSidebarOpen}
+          setIsMobileOpen={setIsMobileSidebarOpen}
         />
         <div className="flex-1 overflow-auto bg-black">
           <Navbar
@@ -300,16 +305,19 @@ const BudgetsPage = () => {
         isAIChatOpen={isAIChatOpen}
         isCollapsed={isSidebarCollapsed}
         setIsCollapsed={setIsSidebarCollapsed}
+        isMobileOpen={isMobileSidebarOpen}
+        setIsMobileOpen={setIsMobileSidebarOpen}
       />
 
       <div className="flex-1 overflow-auto bg-black">
         <Navbar
           title="Budgets"
           subtitle="Track and manage your spending budgets across categories."
+          onMenuClick={() => setIsMobileSidebarOpen(true)}
         />
 
         {/* Content */}
-        <div className="p-8 bg-black">
+        <div className="p-4 md:p-8 bg-black">
           {budgets.length === 0 ? (
             <div className="text-center py-12">
               <div className="text-gray-400 mb-4">
@@ -345,7 +353,7 @@ const BudgetsPage = () => {
             <>
               {/* Summary Cards */}
               <div className="mb-8">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
                   <div className="bg-gray-950 p-6 border border-gray-800 shadow-xl">
                     <h3 className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
                       Total Budget
@@ -378,11 +386,11 @@ const BudgetsPage = () => {
                       className={`text-3xl font-semibold mb-2 ${
                         budgets.reduce(
                           (sum, budget) => sum + budget.budgetAmount,
-                          0
+                          0,
                         ) -
                           budgets.reduce(
                             (sum, budget) => sum + budget.spentAmount,
-                            0
+                            0,
                           ) >=
                         0
                           ? "text-emerald-400"
@@ -393,22 +401,22 @@ const BudgetsPage = () => {
                       {Math.abs(
                         budgets.reduce(
                           (sum, budget) => sum + budget.budgetAmount,
-                          0
+                          0,
                         ) -
                           budgets.reduce(
                             (sum, budget) => sum + budget.spentAmount,
-                            0
-                          )
+                            0,
+                          ),
                       ).toLocaleString()}
                     </p>
                     <p className="text-gray-400 text-sm">
                       {budgets.reduce(
                         (sum, budget) => sum + budget.budgetAmount,
-                        0
+                        0,
                       ) -
                         budgets.reduce(
                           (sum, budget) => sum + budget.spentAmount,
-                          0
+                          0,
                         ) >=
                       0
                         ? "Available"
@@ -423,11 +431,11 @@ const BudgetsPage = () => {
                       {(
                         (budgets.reduce(
                           (sum, budget) => sum + budget.spentAmount,
-                          0
+                          0,
                         ) /
                           budgets.reduce(
                             (sum, budget) => sum + budget.budgetAmount,
-                            0
+                            0,
                           )) *
                         100
                       ).toFixed(1)}
@@ -438,37 +446,37 @@ const BudgetsPage = () => {
                         className={`h-2 ${
                           (budgets.reduce(
                             (sum, budget) => sum + budget.spentAmount,
-                            0
+                            0,
                           ) /
                             budgets.reduce(
                               (sum, budget) => sum + budget.budgetAmount,
-                              0
+                              0,
                             )) *
                             100 <=
                           70
                             ? "bg-emerald-500"
                             : (budgets.reduce(
-                                (sum, budget) => sum + budget.spentAmount,
-                                0
-                              ) /
-                                budgets.reduce(
-                                  (sum, budget) => sum + budget.budgetAmount,
-                                  0
-                                )) *
-                                100 <=
-                              90
-                            ? "bg-yellow-500"
-                            : "bg-red-500"
+                                  (sum, budget) => sum + budget.spentAmount,
+                                  0,
+                                ) /
+                                  budgets.reduce(
+                                    (sum, budget) => sum + budget.budgetAmount,
+                                    0,
+                                  )) *
+                                  100 <=
+                                90
+                              ? "bg-yellow-500"
+                              : "bg-red-500"
                         } transition-all duration-300`}
                         style={{
                           width: `${
                             (budgets.reduce(
                               (sum, budget) => sum + budget.spentAmount,
-                              0
+                              0,
                             ) /
                               budgets.reduce(
                                 (sum, budget) => sum + budget.budgetAmount,
-                                0
+                                0,
                               )) *
                             100
                           }%`,
@@ -514,8 +522,8 @@ const BudgetsPage = () => {
                               budget.status === "under-budget"
                                 ? "bg-emerald-900/50 text-emerald-300 border border-emerald-800"
                                 : budget.status === "over-budget"
-                                ? "bg-red-900/50 text-red-300 border border-red-800"
-                                : "bg-gray-800 text-gray-400 border border-gray-700"
+                                  ? "bg-red-900/50 text-red-300 border border-red-800"
+                                  : "bg-gray-800 text-gray-400 border border-gray-700"
                             }`}
                           >
                             {budget.status.replace("-", " ")}
@@ -537,8 +545,8 @@ const BudgetsPage = () => {
                                 percentage <= 70
                                   ? "bg-emerald-500"
                                   : percentage <= 90
-                                  ? "bg-yellow-500"
-                                  : "bg-red-500"
+                                    ? "bg-yellow-500"
+                                    : "bg-red-500"
                               } transition-all duration-300`}
                               style={{ width: `${Math.min(percentage, 100)}%` }}
                             ></div>
@@ -625,7 +633,7 @@ const BudgetsPage = () => {
                           budgets.filter(
                             (b) =>
                               b.status === "on-track" ||
-                              b.status === "under-budget"
+                              b.status === "under-budget",
                           ).length
                         }
                       </p>

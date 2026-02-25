@@ -19,6 +19,7 @@ const InvestmentsPage = () => {
     toggleAIChatCollapse,
   } = useAIChat();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [investments, setInvestments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -86,7 +87,7 @@ const InvestmentsPage = () => {
               console.log(`📊 Portfolio.stocks:`, doc.portfolio.stocks);
               console.log(
                 `📊 Portfolio.mutual_funds:`,
-                doc.portfolio.mutual_funds
+                doc.portfolio.mutual_funds,
               );
 
               // Process stocks
@@ -117,7 +118,7 @@ const InvestmentsPage = () => {
               // Process mutual funds
               if (doc.portfolio.mutual_funds) {
                 console.log(
-                  `📈 Found ${doc.portfolio.mutual_funds.length} mutual funds`
+                  `📈 Found ${doc.portfolio.mutual_funds.length} mutual funds`,
                 );
                 doc.portfolio.mutual_funds.forEach((mf, index) => {
                   const currentValue = mf.current_value || 0;
@@ -154,7 +155,7 @@ const InvestmentsPage = () => {
         console.error("❌ Error fetching investments:", error);
         console.error(
           "❌ Error details:",
-          error.response?.data || error.message
+          error.response?.data || error.message,
         );
       } finally {
         setLoading(false);
@@ -167,11 +168,11 @@ const InvestmentsPage = () => {
 
   const totalInvested = investments.reduce(
     (sum, inv) => sum + inv.totalInvested,
-    0
+    0,
   );
   const currentValue = investments.reduce(
     (sum, inv) => sum + inv.currentValue,
-    0
+    0,
   );
   const totalGainLoss = currentValue - totalInvested;
   const totalGainLossPercent =
@@ -242,7 +243,7 @@ const InvestmentsPage = () => {
     } catch (error) {
       console.error("Error creating investment:", error);
       setCreateError(
-        error.response?.data?.message || "Failed to create investment"
+        error.response?.data?.message || "Failed to create investment",
       );
     } finally {
       setCreateLoading(false);
@@ -256,19 +257,22 @@ const InvestmentsPage = () => {
         setIsCollapsed={setIsSidebarCollapsed}
         onAIToggle={toggleAIChat}
         isAIChatOpen={isAIChatOpen}
+        isMobileOpen={isMobileSidebarOpen}
+        setIsMobileOpen={setIsMobileSidebarOpen}
       />
 
       <div className="flex-1 overflow-auto bg-black">
         <Navbar
           title="Investments"
           subtitle="Track and manage your investment portfolio performance."
+          onMenuClick={() => setIsMobileSidebarOpen(true)}
         />
 
         {/* Content */}
-        <div className="p-8 bg-black">
+        <div className="p-4 md:p-8 bg-black">
           {/* Portfolio Summary */}
           <div className="mb-8">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
               <div className="bg-gray-950 p-6 border border-gray-800 shadow-xl">
                 <h3 className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
                   Total Invested
@@ -293,7 +297,7 @@ const InvestmentsPage = () => {
                 </h3>
                 <p
                   className={`text-3xl font-semibold mb-2 ${getGainLossColor(
-                    totalGainLoss
+                    totalGainLoss,
                   )}`}
                 >
                   {totalGainLoss >= 0 ? "+" : ""}₹
@@ -378,7 +382,7 @@ const InvestmentsPage = () => {
                         <td className="px-6 py-4">
                           <span
                             className={`px-3 py-1 text-xs font-medium uppercase tracking-wide ${getSectorColor(
-                              investment.sector
+                              investment.sector,
                             )}`}
                           >
                             {investment.type}
@@ -403,7 +407,7 @@ const InvestmentsPage = () => {
                           <div>
                             <p
                               className={`font-semibold ${getGainLossColor(
-                                investment.gainLoss
+                                investment.gainLoss,
                               )}`}
                             >
                               {investment.gainLoss >= 0 ? "+" : ""}₹
@@ -411,7 +415,7 @@ const InvestmentsPage = () => {
                             </p>
                             <p
                               className={`text-sm ${getGainLossColor(
-                                investment.gainLoss
+                                investment.gainLoss,
                               )}`}
                             >
                               {investment.gainLossPercent >= 0 ? "+" : ""}
@@ -440,11 +444,11 @@ const InvestmentsPage = () => {
                 <div className="space-y-4">
                   {["Stock", "Mutual Fund", "ETF"].map((type) => {
                     const typeInvestments = investments.filter(
-                      (inv) => inv.type === type
+                      (inv) => inv.type === type,
                     );
                     const typeValue = typeInvestments.reduce(
                       (sum, inv) => sum + inv.currentValue,
-                      0
+                      0,
                     );
                     const percentage =
                       currentValue > 0 ? (typeValue / currentValue) * 100 : 0;
@@ -460,8 +464,8 @@ const InvestmentsPage = () => {
                               type === "Stock"
                                 ? "bg-blue-500"
                                 : type === "Mutual Fund"
-                                ? "bg-emerald-500"
-                                : "bg-yellow-500"
+                                  ? "bg-emerald-500"
+                                  : "bg-yellow-500"
                             }`}
                           ></div>
                           <span className="text-white font-medium">{type}</span>
@@ -509,7 +513,7 @@ const InvestmentsPage = () => {
                         <div className="text-right">
                           <p
                             className={`font-semibold ${getGainLossColor(
-                              investment.gainLoss
+                              investment.gainLoss,
                             )}`}
                           >
                             {investment.gainLossPercent >= 0 ? "+" : ""}
@@ -517,7 +521,7 @@ const InvestmentsPage = () => {
                           </p>
                           <p
                             className={`text-sm ${getGainLossColor(
-                              investment.gainLoss
+                              investment.gainLoss,
                             )}`}
                           >
                             ₹{Math.abs(investment.gainLoss).toLocaleString()}
