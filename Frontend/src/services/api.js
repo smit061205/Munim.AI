@@ -368,19 +368,19 @@ export const deleteAccount = (authApi, accountId) => {
 
 // Transaction API functions (require authentication)
 export const getTransactions = (authApi) => {
-  return authApi.get("/transaction");
+  return authApi.get("/transactions");
 };
 
 export const createTransaction = (authApi, transactionData) => {
-  return authApi.post("/transaction", transactionData);
+  return authApi.post("/transactions", transactionData);
 };
 
 export const updateTransaction = (authApi, transactionId, transactionData) => {
-  return authApi.put(`/transaction/${transactionId}`, transactionData);
+  return authApi.put(`/transactions/${transactionId}`, transactionData);
 };
 
 export const deleteTransaction = (authApi, transactionId) => {
-  return authApi.delete(`/transaction/${transactionId}`);
+  return authApi.delete(`/transactions/${transactionId}`);
 };
 
 // Investment API functions (require authentication)

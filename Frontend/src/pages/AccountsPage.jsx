@@ -7,6 +7,7 @@ import { createAuthenticatedApi } from "../services/api";
 import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
 import AIChatSidebar from "../components/AIChatSidebar";
+import Modal from "../components/Modal";
 
 const AccountsPage = () => {
   const { user } = useUser();
@@ -31,6 +32,7 @@ const AccountsPage = () => {
   });
   const [createError, setCreateError] = useState("");
   const [createLoading, setCreateLoading] = useState(false);
+  const [selectedAccount, setSelectedAccount] = useState(null);
 
   useEffect(() => {
     const fetchAccounts = async () => {
@@ -406,7 +408,10 @@ const AccountsPage = () => {
                         {new Date(account.lastTransaction).toLocaleDateString()}
                       </p>
                     </div>
-                    <button className="text-emerald-400 hover:text-emerald-300 text-sm font-medium">
+                    <button
+                      onClick={() => setSelectedAccount(account)}
+                      className="text-emerald-400 hover:text-emerald-300 text-sm font-medium"
+                    >
                       View Details
                     </button>
                   </div>
@@ -596,6 +601,76 @@ const AccountsPage = () => {
               </button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {selectedAccount && (
+        <Modal title="Account Details" onClose={() => setSelectedAccount(null)}>
+          <div className="space-y-4 text-white">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-800">
+              <span className="text-gray-400">Account Name</span>
+              <span className="font-medium text-right">
+                {selectedAccount.name}
+              </span>
+            </div>
+            <div className="flex items-center justify-between pb-4 border-b border-gray-800">
+              <span className="text-gray-400">Institution</span>
+              <span className="font-medium text-right">
+                {selectedAccount.bank}
+              </span>
+            </div>
+            <div className="flex items-center justify-between pb-4 border-b border-gray-800">
+              <span className="text-gray-400">Type</span>
+              <span className="font-medium capitalize text-right">
+                {selectedAccount.type}
+              </span>
+            </div>
+            <div className="flex items-center justify-between pb-4 border-b border-gray-800">
+              <span className="text-gray-400">Account Number</span>
+              <span className="font-mono text-right">
+                {selectedAccount.accountNumber}
+              </span>
+            </div>
+            <div className="flex items-center justify-between pb-4 border-b border-gray-800">
+              <span className="text-gray-400">Status</span>
+              <span
+                className={`px-2 py-1 text-xs font-medium uppercase tracking-wide rounded ${
+                  selectedAccount.status === "active"
+                    ? "bg-emerald-900/50 text-emerald-300 border border-emerald-800"
+                    : "bg-gray-800 text-gray-400 border border-gray-700"
+                }`}
+              >
+                {selectedAccount.status}
+              </span>
+            </div>
+            <div className="flex items-center justify-between pb-4 border-b border-gray-800">
+              <span className="text-gray-400">Last Synced</span>
+              <span className="font-medium text-right">
+                {new Date(selectedAccount.lastTransaction).toLocaleDateString()}
+              </span>
+            </div>
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-gray-400 text-lg">Current Balance</span>
+              <span
+                className={`text-2xl font-bold ${
+                  selectedAccount.balance >= 0
+                    ? "text-emerald-400"
+                    : "text-red-400"
+                }`}
+              >
+                {selectedAccount.balance >= 0 ? "" : "-"}₹
+                {Math.abs(selectedAccount.balance).toLocaleString()}
+              </span>
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setSelectedAccount(null)}
+                className="px-6 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
     </div>

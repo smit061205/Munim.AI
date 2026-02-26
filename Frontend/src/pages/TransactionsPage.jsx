@@ -83,7 +83,7 @@ const TransactionsPage = () => {
         account: newTransaction.account,
       };
 
-      const response = await api.post("/transaction", transactionData);
+      const response = await api.post("/transactions", transactionData);
 
       if (response.data.success) {
         setTransactions((prev) => [...prev, response.data.data]);
@@ -270,12 +270,12 @@ const TransactionsPage = () => {
               <h2 className="text-xl font-medium text-white">
                 Transaction Summary
               </h2>
-              {/* <button
+              <button
                 onClick={handleAddTransaction}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 font-medium transition-colors"
               >
                 Add Transaction
-              </button> */}
+              </button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
               <div className="bg-gray-950 p-6 border border-gray-800 shadow-xl">
