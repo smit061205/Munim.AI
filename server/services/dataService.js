@@ -74,6 +74,7 @@ class DataService {
       const result = {};
 
       for (const category of allowedCategories) {
+        if (category === "aiChat") continue; // aiChat is a feature permission, not a data model
         console.log(`🔄 Processing category: ${category}`);
         const data = await this.loadData(category, userId);
         if (data) {
