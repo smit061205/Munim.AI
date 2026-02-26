@@ -18,6 +18,7 @@ import analyticsRoutes from "./routes/analytics.js";
 import permissionRoutes from "./routes/permissions.js";
 import dataRoutes from "./routes/data.js";
 import ingestRoutes from "./routes/ingest.js";
+import { startKeepAlive } from "./services/keepAlive.js";
 
 // Import middleware
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -115,4 +116,9 @@ app.use("*", (req, res) => {
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+
+  // Prevent Render's 15-minute sleep timer
+  if (process.env.NODE_ENV === "production" || process.env.PING_URL) {
+    startKeepAlive();
+  }
 });
