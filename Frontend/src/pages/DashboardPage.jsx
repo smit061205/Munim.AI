@@ -21,6 +21,7 @@ const DashboardPage = () => {
   const { user } = useUser();
   const { getToken } = useAuth();
   const { permissions, getAllowedCategories } = usePermissions();
+  const permissionsStr = JSON.stringify(permissions);
   const {
     isAIChatOpen,
     isAIChatCollapsed,
@@ -180,7 +181,8 @@ const DashboardPage = () => {
     if (getAllowedCategories().length > 0) {
       fetchData();
     }
-  }, [permissions, selectedTimePeriod]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [permissionsStr, selectedTimePeriod]);
 
   // Calculate totals from backend data
   const calculateTotals = useMemo(() => {

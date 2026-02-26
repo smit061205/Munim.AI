@@ -13,6 +13,7 @@ const AccountsPage = () => {
   const { user } = useUser();
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const { permissions } = usePermissions();
+  const permissionsStr = JSON.stringify(permissions);
   const {
     isAIChatOpen,
     isAIChatCollapsed,
@@ -127,7 +128,8 @@ const AccountsPage = () => {
     };
 
     fetchAccounts();
-  }, [permissions, isLoaded, isSignedIn]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [permissionsStr, isLoaded, isSignedIn]);
 
   const totalBalance = accounts.reduce(
     (sum, account) => sum + account.balance,

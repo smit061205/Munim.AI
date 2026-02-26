@@ -12,6 +12,7 @@ const TransactionsPage = () => {
   const { user } = useUser();
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const { permissions } = usePermissions();
+  const permissionsStr = JSON.stringify(permissions);
   const {
     isAIChatOpen,
     isAIChatCollapsed,
@@ -174,62 +175,66 @@ const TransactionsPage = () => {
     };
 
     fetchTransactions();
-  }, [permissions, isLoaded, isSignedIn]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [permissionsStr, isLoaded, isSignedIn]);
 
-  const filteredTransactions = transactions.filter((transaction) => {
-    if (!transaction) return false;
+  const filteredTransactions = transactions
+    .filter((transaction) => {
+      if (!transaction) return false;
 
-    const description =
-      transaction.description ||
-      transaction.category ||
-      `${transaction.type} transaction`;
-    const category = transaction.category || "";
+      const description =
+        transaction.description ||
+        transaction.category ||
+        `${transaction.type} transaction`;
+      const category = transaction.category || "";
 
-    const matchesSearch =
-      description.toLowerCase().includes(filters.search.toLowerCase()) ||
-      category.toLowerCase().includes(filters.search.toLowerCase());
-    const matchesCategory =
-      filters.category === "all" || transaction.category === filters.category;
-    const matchesType =
-      filters.type === "all" || transaction.type === filters.type;
+      const matchesSearch =
+        description.toLowerCase().includes(filters.search.toLowerCase()) ||
+        category.toLowerCase().includes(filters.search.toLowerCase());
+      const matchesCategory =
+        filters.category === "all" || transaction.category === filters.category;
+      const matchesType =
+        filters.type === "all" || transaction.type === filters.type;
 
-    // Date filtering
-    let matchesDate = true;
-    if (filters.dateRange !== "all" && transaction.date) {
-      const transactionDate = new Date(transaction.date);
-      const today = new Date();
+      // Date filtering
+      let matchesDate = true;
+      if (filters.dateRange !== "all" && transaction.date) {
+        const transactionDate = new Date(transaction.date);
+        const today = new Date();
 
-      switch (filters.dateRange) {
-        case "today":
-          matchesDate = transactionDate.toDateString() === today.toDateString();
-          break;
-        case "week":
-          const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-          matchesDate = transactionDate >= weekAgo;
-          break;
-        case "month":
-          const monthAgo = new Date(
-            today.getFullYear(),
-            today.getMonth() - 1,
-            today.getDate(),
-          );
-          matchesDate = transactionDate >= monthAgo;
-          break;
-        case "year":
-          const yearAgo = new Date(
-            today.getFullYear() - 1,
-            today.getMonth(),
-            today.getDate(),
-          );
-          matchesDate = transactionDate >= yearAgo;
-          break;
-        default:
-          matchesDate = true;
+        switch (filters.dateRange) {
+          case "today":
+            matchesDate =
+              transactionDate.toDateString() === today.toDateString();
+            break;
+          case "week":
+            const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+            matchesDate = transactionDate >= weekAgo;
+            break;
+          case "month":
+            const monthAgo = new Date(
+              today.getFullYear(),
+              today.getMonth() - 1,
+              today.getDate(),
+            );
+            matchesDate = transactionDate >= monthAgo;
+            break;
+          case "year":
+            const yearAgo = new Date(
+              today.getFullYear() - 1,
+              today.getMonth(),
+              today.getDate(),
+            );
+            matchesDate = transactionDate >= yearAgo;
+            break;
+          default:
+            matchesDate = true;
+        }
       }
-    }
 
-    return matchesSearch && matchesCategory && matchesType && matchesDate;
-  });
+      return matchesSearch && matchesCategory && matchesType && matchesDate;
+    })
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
 
   // Get unique categories from transactions for dynamic filtering
   const availableCategories = [

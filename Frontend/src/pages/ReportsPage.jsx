@@ -12,6 +12,7 @@ const ReportsPage = () => {
   const { user } = useUser();
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const { permissions } = usePermissions();
+  const permissionsStr = JSON.stringify(permissions);
   const {
     isAIChatOpen,
     isAIChatCollapsed,
@@ -193,7 +194,8 @@ const ReportsPage = () => {
     };
 
     fetchReportData();
-  }, [permissions, selectedPeriod, isLoaded, isSignedIn]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [permissionsStr, selectedPeriod, isLoaded, isSignedIn]);
 
   const currentData = reportData || {
     income: 0,

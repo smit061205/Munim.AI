@@ -12,6 +12,7 @@ const InvestmentsPage = () => {
   const { user } = useUser();
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const { permissions } = usePermissions();
+  const permissionsStr = JSON.stringify(permissions);
   const {
     isAIChatOpen,
     isAIChatCollapsed,
@@ -164,7 +165,8 @@ const InvestmentsPage = () => {
 
     fetchInvestments();
     console.log("🏁 InvestmentsPage useEffect completed");
-  }, [permissions, isLoaded, isSignedIn]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [permissionsStr, isLoaded, isSignedIn]);
 
   const totalInvested = investments.reduce(
     (sum, inv) => sum + inv.totalInvested,
@@ -256,7 +258,7 @@ const InvestmentsPage = () => {
           };
         }
 
-        setInvestments((prev) => [...prev, formattedInvestment]);
+        setInvestments((prev) => [formattedInvestment, ...prev]);
 
         setShowCreateModal(false);
         setNewInvestment({
