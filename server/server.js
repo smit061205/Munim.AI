@@ -59,14 +59,16 @@ const corsOptions = {
 // Middleware
 app.use(cors(corsOptions));
 
-// Parse JSON payloads
-app.use((req, res, next) => {
-  if (req.path === "/api/webhooks/clerk") {
-    next();
-  } else {
-    express.json()(req, res, next);
-  }
-});
+// Mount webhook BEFORE any JSON parsing or auth middleware
+// Svix needs the raw unmodified body buffer to verify signatures
+app.use(
+  "/api/webhooks",
+  express.raw({ type: "application/json" }),
+  webhookRouter,
+);
+
+// Parse JSON payloads for all other routes
+app.use(express.json());
 
 // Apply Clerk auth middleware to all routes
 app.use(withAuth);

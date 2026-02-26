@@ -24,8 +24,11 @@ export const handleWebhook = async (req, res, next) => {
     // Create a new Svix instance with your secret
     const wh = new Webhook(WEBHOOK_SECRET);
 
-    // Verify the webhook payload
-    const payload = await wh.verify(JSON.stringify(req.body), {
+    // Verify the webhook payload using the raw buffer string
+    const payloadBuffer = req.body;
+    const payloadString = payloadBuffer.toString("utf8");
+
+    const payload = wh.verify(payloadString, {
       "svix-id": svix_id,
       "svix-timestamp": svix_timestamp,
       "svix-signature": svix_signature,
