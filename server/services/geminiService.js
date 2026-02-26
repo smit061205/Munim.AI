@@ -553,23 +553,23 @@ Please provide a helpful but CONCISE financial response:`;
   }
 
   // Check if user has access to AI assistant
-  checkUserAccess(userId) {
-    // For now, implement a simple whitelist approach
-    // In production, this would check against a database or permission system
-    const allowedUsers = [
-      "user_32eIuzzFAAlZ1JzWbY3Cp7ZBSzr", // Current user
-      "user_32dTvEx6MFVPV48xQI7evNjRgGB", // Newly added user
-      // Add more user IDs as needed
-    ];
+  async checkUserAccess(userId) {
+    try {
+      const permissions = await UserPermissions.findOne({ clerkId: userId });
+      // If user has the document, rely on the aiChat boolean.
+      // If permissions document is completely missing, default to false.
+      const hasAccess = permissions ? permissions.permissions.aiChat : false;
 
-    const hasAccess = allowedUsers.includes(userId);
+      console.log(`🔐 Access check for user ${userId}:`, {
+        hasAccess,
+        timestamp: new Date().toISOString(),
+      });
 
-    console.log(`🔐 Access check for user ${userId}:`, {
-      hasAccess,
-      timestamp: new Date().toISOString(),
-    });
-
-    return hasAccess;
+      return hasAccess;
+    } catch (error) {
+      console.error(`❌ Error checking access for user ${userId}:`, error);
+      return false; // Fail secure
+    }
   }
 
   // Call Groq API with the formatted prompt and files
@@ -593,13 +593,18 @@ Please provide a helpful but CONCISE financial response:`;
         };
       }
 
-      if (userId && !this.checkUserAccess(userId)) {
-        console.error(`❌ User ${userId} does not have access to AI assistant`);
-        return {
-          success: false,
-          response: "You do not have permission to use the AI assistant.",
-          error: "Unauthorized",
-        };
+      if (userId) {
+        const hasAccess = await this.checkUserAccess(userId);
+        if (!hasAccess) {
+          console.error(
+            `❌ User ${userId} does not have access to AI assistant`,
+          );
+          return {
+            success: false,
+            response: "You do not have permission to use the AI assistant.",
+            error: "Unauthorized",
+          };
+        }
       }
 
       console.log(
