@@ -31,6 +31,10 @@ const userPermissionsSchema = new mongoose.Schema({
       type: Boolean,
       default: true,
     },
+    aiChat: {
+      type: Boolean,
+      default: true,
+    },
   },
   createdAt: {
     type: Date,
@@ -63,6 +67,7 @@ userPermissionsSchema.statics.getUserPermissions = async function (clerkId) {
         investments: true,
         epf: true,
         creditScore: true,
+        aiChat: true,
       },
     });
   }
@@ -74,7 +79,7 @@ userPermissionsSchema.statics.getUserPermissions = async function (clerkId) {
 userPermissionsSchema.statics.updatePermission = async function (
   clerkId,
   category,
-  allowed
+  allowed,
 ) {
   const result = await this.findOneAndUpdate(
     { clerkId },
@@ -87,7 +92,7 @@ userPermissionsSchema.statics.updatePermission = async function (
     {
       upsert: true,
       new: true,
-    }
+    },
   );
 
   return result.permissions;
@@ -95,7 +100,7 @@ userPermissionsSchema.statics.updatePermission = async function (
 
 const UserPermissions = mongoose.model(
   "UserPermissions",
-  userPermissionsSchema
+  userPermissionsSchema,
 );
 
 export default UserPermissions;

@@ -36,7 +36,7 @@ const generateTransactions = (clerkId, userIndex = 0) => {
 
   const incomeCategories = ["Salary", "Freelance", "Business", "Investments"];
   const expenseCategories = categories.filter(
-    (cat) => !incomeCategories.includes(cat)
+    (cat) => !incomeCategories.includes(cat),
   );
 
   // Generate 6 months of data
@@ -48,7 +48,7 @@ const generateTransactions = (clerkId, userIndex = 0) => {
     const salaryDate = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
     transactions.push({
       clerkId,
-      amount: 85000 + userIndex * 15000, 
+      amount: 85000 + userIndex * 15000,
       category: "Salary",
       description: "Monthly Salary",
       date: salaryDate,
@@ -64,7 +64,7 @@ const generateTransactions = (clerkId, userIndex = 0) => {
       const transactionDate = new Date(
         baseDate.getFullYear(),
         baseDate.getMonth(),
-        day
+        day,
       );
 
       const category =
@@ -269,10 +269,10 @@ const generateInvestments = (clerkId, userIndex = 0) => {
       returns: Math.round(currentValue - investedAmount),
       returnsPercentage:
         Math.round(
-          ((currentValue - investedAmount) / investedAmount) * 100 * 100
+          ((currentValue - investedAmount) / investedAmount) * 100 * 100,
         ) / 100,
       purchaseDate: new Date(
-        Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000
+        Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000,
       ), // Random date in last year
       maturityDate:
         Math.random() > 0.5
@@ -432,7 +432,7 @@ const generateLiabilities = (clerkId, userIndex = 0) => {
 export const seedNewUser = async (clerkId, firstName = "User") => {
   try {
     console.log(`\n🌱 Seeding new user data for ${clerkId}...`);
-    
+
     // 1. Grant Full Permissions
     console.log(`  - Granting full UserPermissions`);
     const existingPermissions = await UserPermissions.findOne({ clerkId });
@@ -441,12 +441,12 @@ export const seedNewUser = async (clerkId, firstName = "User") => {
         clerkId,
         user_id: clerkId, // backward-compatibility
         permissions: {
-          transactions: "all",
-          assets: "all",
-          liabilities: "all",
-          investments: "all",
-          aiChat: "all", // Full AI access
-        }
+          transactions: true,
+          assets: true,
+          liabilities: true,
+          investments: true,
+          aiChat: true, // Full AI access
+        },
       });
     }
 
@@ -565,10 +565,10 @@ export const seedNewUser = async (clerkId, firstName = "User") => {
           l.category === "Mortgage"
             ? "home_loan"
             : l.category === "Auto Loan"
-            ? "car_loan"
-            : l.category === "Revolving Credit"
-            ? "credit_card"
-            : "personal_loan",
+              ? "car_loan"
+              : l.category === "Revolving Credit"
+                ? "credit_card"
+                : "personal_loan",
         remaining_balance: l.amount,
         monthly_payment: l.monthlyPayment,
         interest_rate: l.interestRate,
@@ -583,7 +583,7 @@ export const seedNewUser = async (clerkId, firstName = "User") => {
       clerkId: clerkId,
       uan: `${Math.floor(Math.random() * 900000000000) + 100000000000}`,
       member_id: `${firstName.toUpperCase()}${Math.floor(
-        Math.random() * 10000
+        Math.random() * 10000,
       )}`,
       employee_contribution: 12000 + userIndex * 2000,
       employer_contribution: 12000 + userIndex * 2000,
@@ -651,11 +651,11 @@ export const seedNewUser = async (clerkId, firstName = "User") => {
 
     const totalBudget = budgetCategories.reduce(
       (sum, cat) => sum + cat.budgetAmount,
-      0
+      0,
     );
     const totalSpent = budgetCategories.reduce(
       (sum, cat) => sum + cat.spentAmount,
-      0
+      0,
     );
 
     const budgetDoc = new Budget({
@@ -667,22 +667,18 @@ export const seedNewUser = async (clerkId, firstName = "User") => {
         budgetAmount: cat.budgetAmount,
         spentAmount: cat.spentAmount,
         period: "monthly",
-        startDate: new Date(
-          new Date().getFullYear(),
-          new Date().getMonth(),
-          1
-        ),
+        startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
         endDate: new Date(
           new Date().getFullYear(),
           new Date().getMonth() + 1,
-          0
+          0,
         ),
         status:
           cat.spentAmount > cat.budgetAmount
             ? "over-budget"
             : cat.spentAmount > cat.budgetAmount * 0.9
-            ? "on-track"
-            : "under-budget",
+              ? "on-track"
+              : "under-budget",
         isActive: true,
       })),
       totalBudget,
