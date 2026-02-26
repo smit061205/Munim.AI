@@ -207,21 +207,56 @@ const InvestmentsPage = () => {
       const token = await user.getToken();
       const api = createAuthenticatedApi(token);
 
-      const response = await api.post("/investment", newInvestment);
-
+      const response = await api.post("/investments", newInvestment);
       if (response.data.success) {
-        // Update investments state based on type
+        const docIndex = Date.now(); // random ID prefix
+        const index = 0;
+        const newDoc = response.data.data;
+
+        // Cast into frontend flat structure
+        let formattedInvestment;
+
         if (newInvestment.type === "stock") {
-          setInvestments((prev) => ({
-            ...prev,
-            stocks: [...prev.stocks, response.data.data],
-          }));
+          const currentValue = newDoc.current_value || 0;
+          const quantity = newDoc.quantity || 0;
+          const avgPrice = quantity > 0 ? currentValue / quantity : 0;
+
+          formattedInvestment = {
+            id: `stock_${docIndex}_${index}`,
+            name: newDoc.company_name || newDoc.symbol || "Unknown Stock",
+            type: "Stock",
+            symbol: newDoc.symbol || "N/A",
+            units: quantity,
+            avgPrice: avgPrice,
+            currentPrice: avgPrice,
+            totalInvested: currentValue,
+            currentValue: currentValue,
+            gainLoss: 0,
+            gainLossPercent: 0,
+            sector: newDoc.sector || "Unknown",
+          };
         } else {
-          setInvestments((prev) => ({
-            ...prev,
-            mutual_funds: [...prev.mutual_funds, response.data.data],
-          }));
+          const currentValue = newDoc.current_value || 0;
+          const units = newDoc.units || 0;
+          const navPrice = units > 0 ? currentValue / units : 0;
+
+          formattedInvestment = {
+            id: `mf_${docIndex}_${index}`,
+            name: newDoc.scheme_name || "Unknown Mutual Fund",
+            type: "Mutual Fund",
+            symbol: newDoc.scheme_code || "N/A",
+            units: units,
+            avgPrice: navPrice,
+            currentPrice: navPrice,
+            totalInvested: currentValue,
+            currentValue: currentValue,
+            gainLoss: 0,
+            gainLossPercent: 0,
+            sector: newDoc.category || "Diversified",
+          };
         }
+
+        setInvestments((prev) => [...prev, formattedInvestment]);
 
         setShowCreateModal(false);
         setNewInvestment({
@@ -324,12 +359,12 @@ const InvestmentsPage = () => {
           <div className="mb-8">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-medium text-white">Your Holdings</h2>
-              {/* <button
+              <button
                 onClick={handleAddInvestment}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 font-medium transition-colors"
               >
                 Add Investment
-              </button> */}
+              </button>
             </div>
 
             <div className="bg-gray-950 border border-gray-800 overflow-hidden shadow-xl">
@@ -575,189 +610,239 @@ const InvestmentsPage = () => {
                     <option value="mutual_fund">Mutual Fund</option>
                   </select>
                 </div>
-                <div>
-                  <label className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
-                    Symbol
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full p-2 text-gray-300 font-medium bg-gray-800 border border-gray-700"
-                    value={newInvestment.symbol}
-                    onChange={(e) =>
-                      setNewInvestment({
-                        ...newInvestment,
-                        symbol: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
-                    Company Name
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full p-2 text-gray-300 font-medium bg-gray-800 border border-gray-700"
-                    value={newInvestment.company_name}
-                    onChange={(e) =>
-                      setNewInvestment({
-                        ...newInvestment,
-                        company_name: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
-                    Quantity
-                  </label>
-                  <input
-                    type="number"
-                    className="w-full p-2 text-gray-300 font-medium bg-gray-800 border border-gray-700"
-                    value={newInvestment.quantity}
-                    onChange={(e) =>
-                      setNewInvestment({
-                        ...newInvestment,
-                        quantity: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
-                    Current Value
-                  </label>
-                  <input
-                    type="number"
-                    className="w-full p-2 text-gray-300 font-medium bg-gray-800 border border-gray-700"
-                    value={newInvestment.current_value}
-                    onChange={(e) =>
-                      setNewInvestment({
-                        ...newInvestment,
-                        current_value: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
-                    Purchase Price
-                  </label>
-                  <input
-                    type="number"
-                    className="w-full p-2 text-gray-300 font-medium bg-gray-800 border border-gray-700"
-                    value={newInvestment.purchase_price}
-                    onChange={(e) =>
-                      setNewInvestment({
-                        ...newInvestment,
-                        purchase_price: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
-                    Sector
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full p-2 text-gray-300 font-medium bg-gray-800 border border-gray-700"
-                    value={newInvestment.sector}
-                    onChange={(e) =>
-                      setNewInvestment({
-                        ...newInvestment,
-                        sector: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
-                    Scheme Name
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full p-2 text-gray-300 font-medium bg-gray-800 border border-gray-700"
-                    value={newInvestment.scheme_name}
-                    onChange={(e) =>
-                      setNewInvestment({
-                        ...newInvestment,
-                        scheme_name: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
-                    Scheme Code
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full p-2 text-gray-300 font-medium bg-gray-800 border border-gray-700"
-                    value={newInvestment.scheme_code}
-                    onChange={(e) =>
-                      setNewInvestment({
-                        ...newInvestment,
-                        scheme_code: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
-                    Units
-                  </label>
-                  <input
-                    type="number"
-                    className="w-full p-2 text-gray-300 font-medium bg-gray-800 border border-gray-700"
-                    value={newInvestment.units}
-                    onChange={(e) =>
-                      setNewInvestment({
-                        ...newInvestment,
-                        units: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
-                    NAV
-                  </label>
-                  <input
-                    type="number"
-                    className="w-full p-2 text-gray-300 font-medium bg-gray-800 border border-gray-700"
-                    value={newInvestment.nav}
-                    onChange={(e) =>
-                      setNewInvestment({
-                        ...newInvestment,
-                        nav: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
-                    Category
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full p-2 text-gray-300 font-medium bg-gray-800 border border-gray-700"
-                    value={newInvestment.category}
-                    onChange={(e) =>
-                      setNewInvestment({
-                        ...newInvestment,
-                        category: e.target.value,
-                      })
-                    }
-                  />
-                </div>
+
+                {newInvestment.type === "stock" && (
+                  <>
+                    <div>
+                      <label className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
+                        Symbol
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full p-2 text-gray-300 font-medium bg-gray-800 border border-gray-700 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
+                        value={newInvestment.symbol}
+                        onChange={(e) =>
+                          setNewInvestment({
+                            ...newInvestment,
+                            symbol: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
+                        Company Name
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full p-2 text-gray-300 font-medium bg-gray-800 border border-gray-700 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
+                        value={newInvestment.company_name}
+                        onChange={(e) =>
+                          setNewInvestment({
+                            ...newInvestment,
+                            company_name: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
+                        Quantity
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        className="w-full p-2 text-gray-300 font-medium bg-gray-800 border border-gray-700 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
+                        value={newInvestment.quantity}
+                        onChange={(e) =>
+                          setNewInvestment({
+                            ...newInvestment,
+                            quantity: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
+                        Current Value (₹)
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        className="w-full p-2 text-gray-300 font-medium bg-gray-800 border border-gray-700 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
+                        value={newInvestment.current_value}
+                        onChange={(e) =>
+                          setNewInvestment({
+                            ...newInvestment,
+                            current_value: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
+                        Purchase Price (₹)
+                      </label>
+                      <input
+                        type="number"
+                        className="w-full p-2 text-gray-300 font-medium bg-gray-800 border border-gray-700 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
+                        value={newInvestment.purchase_price}
+                        onChange={(e) =>
+                          setNewInvestment({
+                            ...newInvestment,
+                            purchase_price: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
+                        Sector
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full p-2 text-gray-300 font-medium bg-gray-800 border border-gray-700 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
+                        value={newInvestment.sector}
+                        onChange={(e) =>
+                          setNewInvestment({
+                            ...newInvestment,
+                            sector: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  </>
+                )}
+
+                {newInvestment.type === "mutual_fund" && (
+                  <>
+                    <div>
+                      <label className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
+                        Scheme Name
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full p-2 text-gray-300 font-medium bg-gray-800 border border-gray-700 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
+                        value={newInvestment.scheme_name}
+                        onChange={(e) =>
+                          setNewInvestment({
+                            ...newInvestment,
+                            scheme_name: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
+                        Scheme Code
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full p-2 text-gray-300 font-medium bg-gray-800 border border-gray-700 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
+                        value={newInvestment.scheme_code}
+                        onChange={(e) =>
+                          setNewInvestment({
+                            ...newInvestment,
+                            scheme_code: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
+                        Units
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        className="w-full p-2 text-gray-300 font-medium bg-gray-800 border border-gray-700 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
+                        value={newInvestment.units}
+                        onChange={(e) =>
+                          setNewInvestment({
+                            ...newInvestment,
+                            units: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
+                        Current Value (₹)
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        className="w-full p-2 text-gray-300 font-medium bg-gray-800 border border-gray-700 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
+                        value={newInvestment.current_value}
+                        onChange={(e) =>
+                          setNewInvestment({
+                            ...newInvestment,
+                            current_value: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
+                        NAV (₹)
+                      </label>
+                      <input
+                        type="number"
+                        className="w-full p-2 text-gray-300 font-medium bg-gray-800 border border-gray-700 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
+                        value={newInvestment.nav}
+                        onChange={(e) =>
+                          setNewInvestment({
+                            ...newInvestment,
+                            nav: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
+                        Category
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full p-2 text-gray-300 font-medium bg-gray-800 border border-gray-700 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
+                        value={newInvestment.category}
+                        onChange={(e) =>
+                          setNewInvestment({
+                            ...newInvestment,
+                            category: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  </>
+                )}
               </div>
-              <button
-                type="submit"
-                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 font-medium transition-colors"
-              >
-                Create Investment
-              </button>
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={createLoading}
+                  className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                >
+                  {createLoading ? (
+                    <div className="flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                      Creating...
+                    </div>
+                  ) : (
+                    "Create Investment"
+                  )}
+                </button>
+              </div>
               {createError && (
                 <p className="text-red-400 text-sm mt-2">{createError}</p>
               )}

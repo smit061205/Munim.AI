@@ -385,11 +385,11 @@ export const deleteTransaction = (authApi, transactionId) => {
 
 // Investment API functions (require authentication)
 export const getInvestments = (authApi) => {
-  return authApi.get("/investment");
+  return authApi.get("/investments");
 };
 
 export const createInvestment = (authApi, investmentData) => {
-  return authApi.post("/investment", investmentData);
+  return authApi.post("/investments", investmentData);
 };
 
 export const updateInvestment = (
@@ -398,11 +398,11 @@ export const updateInvestment = (
   investmentId,
   investmentData,
 ) => {
-  return authApi.put(`/investment/${type}/${investmentId}`, investmentData);
+  return authApi.put(`/investments/${type}/${investmentId}`, investmentData);
 };
 
 export const deleteInvestment = (authApi, type, investmentId) => {
-  return authApi.delete(`/investment/${type}/${investmentId}`);
+  return authApi.delete(`/investments/${type}/${investmentId}`);
 };
 
 export default api;
