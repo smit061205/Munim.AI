@@ -62,12 +62,19 @@ export const handleWebhook = async (req, res, next) => {
 async function handleUserCreated(data) {
   const { id, email_addresses, first_name, last_name, image_url } = data;
 
+  // Provide defaults to prevent Mongoose validation errors
+  // E.g., Google SSO users might not have a last name
+  const email =
+    email_addresses && email_addresses.length > 0
+      ? email_addresses[0].email_address
+      : `${id}@placeholder.clerk.com`;
+
   await User.create({
     clerkId: id,
-    email: email_addresses[0]?.email_address,
-    firstName: first_name,
-    lastName: last_name,
-    profileImage: image_url,
+    email: email,
+    firstName: first_name || "User",
+    lastName: last_name || "",
+    profileImage: image_url || "",
   });
 
   // Seed the new user with full permissions and mock financial data asynchronously
@@ -86,13 +93,18 @@ async function handleUserCreated(data) {
 async function handleUserUpdated(data) {
   const { id, email_addresses, first_name, last_name, image_url } = data;
 
+  const email =
+    email_addresses && email_addresses.length > 0
+      ? email_addresses[0].email_address
+      : `${id}@placeholder.clerk.com`;
+
   await User.findOneAndUpdate(
     { clerkId: id },
     {
-      email: email_addresses[0]?.email_address,
-      firstName: first_name,
-      lastName: last_name,
-      profileImage: image_url,
+      email: email,
+      firstName: first_name || "User",
+      lastName: last_name || "",
+      profileImage: image_url || "",
       updatedAt: Date.now(),
     },
     { new: true },
