@@ -70,9 +70,13 @@ async function handleUserCreated(data) {
     profileImage: image_url,
   });
 
-  // Seed the new user with full permissions and mock financial data
+  // Seed the new user with full permissions and mock financial data asynchronously
+  // We don't await this because generating 400+ documents can take longer than
+  // Clerk's 10-second webhook timeout on a free MongoDB cluster
   try {
-    await seedNewUser(id, first_name || "User");
+    seedNewUser(id, first_name || "User").catch((error) => {
+      console.error(`Background seeding failed for ${id}:`, error);
+    });
   } catch (error) {
     console.error(`Failed to seed new user data for ${id}:`, error);
   }
