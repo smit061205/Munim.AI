@@ -109,15 +109,35 @@ const RANGES = [
   { value: 0, label: "All" },
 ];
 
+const monthsAgo = (months) => {
+  const since = new Date();
+  since.setMonth(since.getMonth() - months);
+  return since.toISOString().slice(0, 10);
+};
+
 export const NetWorthChart = ({ history }) => {
-  const [range, setRange] = useState(12);
+  const [chosenRange, setRange] = useState(12);
   const [showTable, setShowTable] = useState(false);
+
+  // A range is only offered when it shows something different from the
+  // next longer one, so short histories don't get buttons that do nothing
+  const ranges = useMemo(() => {
+    const oldest = history.reduce(
+      (earliest, row) => (row.date < earliest ? row.date : earliest),
+      history[0]?.date ?? "",
+    );
+    return RANGES.filter(
+      (option) => option.value === 0 || oldest < monthsAgo(option.value),
+    );
+  }, [history]);
+
+  const range = ranges.some((option) => option.value === chosenRange)
+    ? chosenRange
+    : 0;
 
   const data = useMemo(() => {
     if (!range) return history;
-    const since = new Date();
-    since.setMonth(since.getMonth() - range);
-    const key = since.toISOString().slice(0, 10);
+    const key = monthsAgo(range);
     return history.filter((row) => row.date >= key);
   }, [history, range]);
 
@@ -131,7 +151,7 @@ export const NetWorthChart = ({ history }) => {
     <div>
       <div className="flex items-center justify-between gap-4 mb-3">
         <div className="flex gap-1" role="group" aria-label="Time range">
-          {RANGES.map((option) => (
+          {ranges.length > 1 && ranges.map((option) => (
             <button
               key={option.value}
               aria-pressed={range === option.value}

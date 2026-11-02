@@ -146,11 +146,15 @@ const MixFinder = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  const profile = useMemo(() => {
+  // Each horizon offers three neighbouring profiles, one per reaction, so
+  // changing either answer moves the mix. Money needed within three years
+  // is the exception: it stays cautious whatever the appetite for risk.
+  const { profile, capped } = useMemo(() => {
     const score = HORIZONS[horizon].score + REACTIONS[reaction].score;
-    // Money needed soon stays cautious, whatever the appetite for risk
-    const capped = horizon === 0 ? Math.min(score, 1) : score;
-    return PROFILES[Math.min(capped, PROFILES.length - 1)];
+    if (horizon === 0) {
+      return { profile: PROFILES[Math.min(score, 1)], capped: score > 1 };
+    }
+    return { profile: PROFILES[score - 1], capped: false };
   }, [horizon, reaction]);
 
   return (
@@ -188,6 +192,11 @@ const MixFinder = () => {
             </motion.span>
           </AnimatePresence>
         </p>
+        {capped && (
+          <p className="text-sm text-muted -mt-2 mb-4">
+            Capped here because you need this money within 3 years.
+          </p>
+        )}
         <div className="flex gap-0.5 h-3 mb-3" aria-hidden="true">
           {CLASSES.map(({ key }, index) => (
             <motion.div
@@ -249,9 +258,14 @@ const monthsBack = (count) =>
     return date.toISOString().slice(0, 7);
   });
 
-const EXAMPLE_HISTORY = monthsBack(12).map((month, index) => ({
+// Thirty months, so the 6M, 1Y and All views each show something different
+const EXAMPLE_HISTORY = monthsBack(30).map((month, index) => ({
   date: `${month}-01`,
-  value: [64.2, 65, 65.9, 65.1, 66.4, 67.9, 68.5, 69.3, 70.6, 71.2, 72, 72.8][index] * 1e5,
+  value: [
+    48.6, 49.1, 49.9, 49.4, 50.6, 51.8, 51.2, 52.5, 53.7, 54.4, 53.6, 55.1,
+    56.3, 57.4, 58.0, 59.6, 60.8, 61.9,
+    64.2, 65, 65.9, 65.1, 66.4, 67.9, 68.5, 69.3, 70.6, 71.2, 72, 72.8,
+  ][index] * 1e5,
 }));
 
 const EXAMPLE_ALLOCATION = [
