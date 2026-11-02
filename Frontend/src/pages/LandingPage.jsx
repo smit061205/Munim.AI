@@ -1,6 +1,15 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus } from "lucide-react";
+import {
+  AnimatePresence,
+  MotionConfig,
+  animate,
+  motion,
+  useMotionValueEvent,
+  useReducedMotion,
+  useScroll,
+} from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { Logo } from "../components/AppLayout";
 import {
@@ -12,7 +21,7 @@ import {
   SERIES,
   SpendingBars,
 } from "../components/charts";
-import { Progress, Tabs } from "../components/ui";
+import { Progress } from "../components/ui";
 import { projectSip } from "../lib/calculators";
 import { formatCompact, formatMoney } from "../lib/format";
 
@@ -24,6 +33,58 @@ const PROFILES = [
   { label: "Growth", equity: 70, debt: 22, gold: 8, body: "Long-term growth comes first, and you can sit through sharp falls along the way." },
   { label: "Aggressive", equity: 85, debt: 10, gold: 5, body: "Mostly equity, for long horizons and a real tolerance for large swings." },
 ];
+
+const EASE = [0.22, 1, 0.36, 1];
+
+// Rises into place the first time it scrolls into view
+const Reveal = ({ children, delay = 0, className = "", as = "div" }) => {
+  const Tag = motion[as];
+  return (
+    <Tag
+      className={className}
+      initial={{ opacity: 0, y: 28 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "0px 0px -10% 0px" }}
+      transition={{ duration: 0.8, ease: EASE, delay }}
+    >
+      {children}
+    </Tag>
+  );
+};
+
+// Counts from the last shown value to the new one. The text is written
+// directly so a running count never re-renders the page.
+const CountUp = ({ value, format, from = value, delay = 0 }) => {
+  const node = useRef(null);
+  const shown = useRef(from);
+  const first = useRef(true);
+  const reduce = useReducedMotion();
+
+  useLayoutEffect(() => {
+    const element = node.current;
+    if (reduce) {
+      element.textContent = format(value);
+      shown.current = value;
+      return undefined;
+    }
+    element.textContent = format(shown.current);
+    const controls = animate(shown.current, value, {
+      duration: 0.9,
+      ease: EASE,
+      delay: first.current ? delay : 0,
+      onUpdate: (latest) => {
+        shown.current = latest;
+        element.textContent = format(latest);
+      },
+    });
+    first.current = false;
+    return () => controls.stop();
+    // format is a stable formatter passed inline
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, reduce, delay]);
+
+  return <span ref={node} className="tnum" />;
+};
 
 const HORIZONS = [
   { label: "Within 3 years", score: 0 },
@@ -44,7 +105,7 @@ const CLASSES = [
   { key: "gold", label: "Gold" },
 ];
 
-const Choice = ({ legend, options, value, onChange }) => (
+const Choice = ({ name, legend, options, value, onChange }) => (
   <fieldset>
     <legend className="text-sm text-muted mb-2">{legend}</legend>
     <div className="flex flex-wrap gap-1.5">
@@ -53,13 +114,20 @@ const Choice = ({ legend, options, value, onChange }) => (
           key={option.label}
           aria-pressed={value === index}
           onClick={() => onChange(index)}
-          className={`px-3 h-9 rounded-lg border text-sm transition-colors ${
+          className={`relative px-3 h-9 rounded-lg border text-sm transition-colors duration-300 active:scale-[0.97] ${
             value === index
-              ? "bg-accent border-accent text-canvas"
+              ? "border-accent text-canvas"
               : "bg-surface border-line-strong hover:bg-wash"
           }`}
         >
-          {option.label}
+          {value === index && (
+            <motion.span
+              layoutId={`choice-${name}`}
+              className="absolute -inset-px rounded-lg bg-accent"
+              transition={{ type: "spring", stiffness: 420, damping: 36 }}
+            />
+          )}
+          <span className="relative">{option.label}</span>
         </button>
       ))}
     </div>
@@ -71,6 +139,12 @@ const Choice = ({ legend, options, value, onChange }) => (
 const MixFinder = () => {
   const [horizon, setHorizon] = useState(2);
   const [reaction, setReaction] = useState(1);
+  // The bars wait for the page to finish arriving only the first time
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(true), 1200);
+    return () => clearTimeout(timer);
+  }, []);
 
   const profile = useMemo(() => {
     const score = HORIZONS[horizon].score + REACTIONS[reaction].score;
@@ -83,12 +157,14 @@ const MixFinder = () => {
     <div className="bg-surface border border-line rounded-xl p-6">
       <div className="space-y-5">
         <Choice
+          name="horizon"
           legend="When will you need this money?"
           options={HORIZONS}
           value={horizon}
           onChange={setHorizon}
         />
         <Choice
+          name="reaction"
           legend="If your investments fell 20% in a month, you would"
           options={REACTIONS}
           value={reaction}
@@ -98,17 +174,33 @@ const MixFinder = () => {
 
       <div className="border-t border-line mt-6 pt-5" aria-live="polite">
         <p className="text-sm text-muted">A mix like yours</p>
-        <p className="font-display text-4xl leading-tight mt-0.5 mb-4">
-          {profile.label}
+        <p className="font-display text-4xl leading-tight mt-0.5 mb-4 overflow-hidden">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span
+              key={profile.label}
+              className="block"
+              initial={{ y: "60%", opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: "-60%", opacity: 0 }}
+              transition={{ duration: 0.22, ease: EASE }}
+            >
+              {profile.label}
+            </motion.span>
+          </AnimatePresence>
         </p>
         <div className="flex gap-0.5 h-3 mb-3" aria-hidden="true">
-          {CLASSES.map(({ key }) => (
-            <div
+          {CLASSES.map(({ key }, index) => (
+            <motion.div
               key={key}
-              className="first:rounded-l last:rounded-r transition-[width] duration-500 ease-out"
-              style={{
-                width: `${profile[key]}%`,
-                background: ASSET_CLASS_COLORS[key],
+              className="first:rounded-l last:rounded-r"
+              style={{ background: ASSET_CLASS_COLORS[key] }}
+              initial={{ width: "0%" }}
+              animate={{ width: `${profile[key]}%` }}
+              transition={{
+                type: "spring",
+                stiffness: 140,
+                damping: 22,
+                delay: settled ? 0 : 0.9 + index * 0.08,
               }}
             />
           ))}
@@ -133,9 +225,11 @@ const MixFinder = () => {
                     {label}
                   </span>
                 </td>
-                <td className="py-2 text-right tnum">{profile[key]}%</td>
-                <td className="py-2 text-right tnum">
-                  {formatMoney(profile[key] * 10000)}
+                <td className="py-2 text-right">
+                  <CountUp value={profile[key]} from={0} delay={0.9} format={(v) => `${Math.round(v)}%`} />
+                </td>
+                <td className="py-2 text-right">
+                  <CountUp value={profile[key] * 10000} from={0} delay={0.9} format={formatMoney} />
                 </td>
               </tr>
             ))}
@@ -230,14 +324,16 @@ const STEPS = [
 
 const HowItWorks = () => (
   <Shell id="how-it-works" className="py-20 lg:py-28 border-t border-line">
-    <Heading className="max-w-2xl mb-14">From scattered accounts to a clear plan</Heading>
+    <Reveal>
+      <Heading className="max-w-2xl mb-14">From scattered accounts to a clear plan</Heading>
+    </Reveal>
     <ol className="grid md:grid-cols-3 gap-10 lg:gap-16">
       {STEPS.map((step, index) => (
-        <li key={step.title}>
+        <Reveal as="li" key={step.title} delay={0.12 * index}>
           <p className="font-display text-6xl text-series-1 mb-4">{index + 1}</p>
           <h3 className="text-xl font-semibold mb-2">{step.title}</h3>
           <p className="text-muted">{step.body}</p>
-        </li>
+        </Reveal>
       ))}
     </ol>
   </Shell>
@@ -361,24 +457,68 @@ const ProductTour = () => {
 
   return (
     <Shell id="product" className="py-20 lg:py-28 bg-wash">
-      <Heading className="max-w-2xl mb-10">Your whole financial picture, kept honest</Heading>
-      <Tabs tabs={TOUR} value={tab} onChange={setTab} />
-      <div className="bg-surface border border-line rounded-xl p-5 lg:p-8">
-        <h3 className="text-xl font-semibold mb-1">{title}</h3>
-        <ExampleNote />
-        <Panel />
-      </div>
+      <Reveal>
+        <Heading className="max-w-2xl mb-10">Your whole financial picture, kept honest</Heading>
+      </Reveal>
+      <Reveal delay={0.1}>
+        <div role="tablist" className="flex gap-6 border-b border-line mb-6 overflow-x-auto">
+          {TOUR.map((item) => (
+            <button
+              key={item.value}
+              role="tab"
+              id={`tour-tab-${item.value}`}
+              aria-selected={tab === item.value}
+              aria-controls="tour-panel"
+              onClick={() => setTab(item.value)}
+              className={`relative pb-2.5 font-medium whitespace-nowrap transition-colors ${
+                tab === item.value ? "text-ink" : "text-muted hover:text-ink"
+              }`}
+            >
+              {item.label}
+              {tab === item.value && (
+                <motion.span
+                  layoutId="tour-underline"
+                  className="absolute inset-x-0 -bottom-px h-0.5 bg-accent"
+                  transition={{ type: "spring", stiffness: 420, damping: 38 }}
+                />
+              )}
+            </button>
+          ))}
+        </div>
+        <div
+          id="tour-panel"
+          role="tabpanel"
+          aria-labelledby={`tour-tab-${tab}`}
+          className="bg-surface border border-line rounded-xl p-5 lg:p-8 lg:min-h-[500px]"
+        >
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={tab}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.28, ease: EASE }}
+            >
+              <h3 className="text-xl font-semibold mb-1">{title}</h3>
+              <ExampleNote />
+              <Panel />
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </Reveal>
     </Shell>
   );
 };
 
 const Feature = ({ title, body, children, reverse }) => (
   <div className="grid lg:grid-cols-2 gap-10 lg:gap-20 items-center">
-    <div className={reverse ? "lg:order-2" : ""}>
+    <Reveal className={reverse ? "lg:order-2" : ""}>
       <Heading>{title}</Heading>
       <p className="text-lg text-muted mt-5 max-w-md">{body}</p>
-    </div>
-    <div className={`min-w-0 ${reverse ? "lg:order-1" : ""}`}>{children}</div>
+    </Reveal>
+    <Reveal delay={0.12} className={`min-w-0 ${reverse ? "lg:order-1" : ""}`}>
+      {children}
+    </Reveal>
   </div>
 );
 
@@ -448,8 +588,8 @@ const SipPreview = () => {
   return (
     <div className="bg-surface border border-line rounded-xl p-6">
       <p className="text-sm text-muted">Could grow to</p>
-      <p className="text-4xl font-semibold tracking-tight tnum mt-1 mb-5">
-        {formatCompact(result.value)}
+      <p className="text-4xl font-semibold tracking-tight mt-1 mb-5">
+        <CountUp value={result.value} format={formatCompact} />
       </p>
       <div className="space-y-4 mb-5">
         <Slider
@@ -500,40 +640,62 @@ const CONVERSATION = [
 const AssistantDemo = () => (
   <Shell id="assistant" className="py-20 lg:py-28 bg-accent text-canvas">
     <div className="grid lg:grid-cols-2 gap-10 lg:gap-20 items-center">
-      <div>
+      <Reveal>
         <Heading>Ask about your money, and get answers from your own numbers</Heading>
         <p className="text-lg text-accent-soft mt-5 max-w-md">
           Munimji reads the balances, debts and spending you choose to share.
           It talks about asset classes and never tells you to buy a specific
           stock or fund. Conversations stay saved until you delete them.
         </p>
-      </div>
-      <div className="bg-surface text-ink rounded-xl p-5 lg:p-6 space-y-4">
+      </Reveal>
+      <motion.div
+        className="bg-surface text-ink rounded-xl p-5 lg:p-6 space-y-4"
+        initial="hidden"
+        whileInView="shown"
+        viewport={{ once: true, margin: "0px 0px -15% 0px" }}
+        variants={{
+          hidden: { opacity: 0, y: 28 },
+          shown: {
+            opacity: 1,
+            y: 0,
+            transition: { duration: 0.7, ease: EASE, staggerChildren: 0.45, delayChildren: 0.3 },
+          },
+        }}
+      >
         <p className="text-sm text-muted">Example conversation</p>
-        {CONVERSATION.map((message) =>
-          message.from === "you" ? (
-            <div key={message.text} className="flex justify-end">
+        {CONVERSATION.map((message) => (
+          <motion.div
+            key={message.text}
+            className={message.from === "you" ? "flex justify-end" : ""}
+            variants={{
+              hidden: { opacity: 0, y: 10 },
+              shown: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE } },
+            }}
+          >
+            {message.from === "you" ? (
               <p className="max-w-[85%] bg-accent-soft rounded-xl px-3.5 py-2">
                 {message.text}
               </p>
-            </div>
-          ) : (
-            <p key={message.text}>{message.text}</p>
-          ),
-        )}
-      </div>
+            ) : (
+              <p>{message.text}</p>
+            )}
+          </motion.div>
+        ))}
+      </motion.div>
     </div>
   </Shell>
 );
 
 const Profiles = () => (
   <Shell id="profiles" className="py-20 lg:py-28">
-    <Heading className="max-w-2xl mb-4">Five ways to invest. One that fits you.</Heading>
-    <p className="text-lg text-muted max-w-xl mb-12">
-      Your answers place you in one of these. If you need the money soon or
-      have no emergency fund, the profile is capped lower, whatever your
-      appetite for risk.
-    </p>
+    <Reveal>
+      <Heading className="max-w-2xl mb-4">Five ways to invest. One that fits you.</Heading>
+      <p className="text-lg text-muted max-w-xl mb-12">
+        Your answers place you in one of these. If you need the money soon or
+        have no emergency fund, the profile is capped lower, whatever your
+        appetite for risk.
+      </p>
+    </Reveal>
     <ul className="border-t border-line">
       {PROFILES.map((profile) => (
         <li
@@ -550,11 +712,15 @@ const Profiles = () => (
               role="img"
               aria-label={CLASSES.map(({ key, label }) => `${profile[key]}% ${label}`).join(", ")}
             >
-              {CLASSES.map(({ key }) => (
-                <div
+              {CLASSES.map(({ key }, index) => (
+                <motion.div
                   key={key}
                   className="first:rounded-l last:rounded-r"
-                  style={{ width: `${profile[key]}%`, background: ASSET_CLASS_COLORS[key] }}
+                  style={{ background: ASSET_CLASS_COLORS[key] }}
+                  initial={{ width: "0%" }}
+                  whileInView={{ width: `${profile[key]}%` }}
+                  viewport={{ once: true, margin: "0px 0px -10% 0px" }}
+                  transition={{ duration: 0.9, ease: EASE, delay: 0.1 + index * 0.08 }}
                 />
               ))}
             </div>
@@ -589,13 +755,15 @@ const PROMISES = [
 
 const Promises = () => (
   <Shell id="privacy" className="py-20 lg:py-28 bg-wash">
-    <Heading className="max-w-2xl mb-12">You stay in control of your data</Heading>
+    <Reveal>
+      <Heading className="max-w-2xl mb-12">You stay in control of your data</Heading>
+    </Reveal>
     <dl className="grid md:grid-cols-2 gap-x-16 gap-y-10">
-      {PROMISES.map((item) => (
-        <div key={item.title} className="border-t border-line-strong pt-5">
+      {PROMISES.map((item, index) => (
+        <Reveal key={item.title} delay={0.08 * index} className="border-t border-line-strong pt-5">
           <dt className="text-lg font-semibold">{item.title}</dt>
           <dd className="text-muted mt-1 max-w-md">{item.body}</dd>
-        </div>
+        </Reveal>
       ))}
     </dl>
   </Shell>
@@ -628,24 +796,128 @@ const QUESTIONS = [
   },
 ];
 
+const Question = ({ item, index }) => {
+  const [open, setOpen] = useState(false);
+  const id = `question-${index}`;
+
+  return (
+    <div className="border-b border-line">
+      <h3>
+        <button
+          aria-expanded={open}
+          aria-controls={id}
+          onClick={() => setOpen(!open)}
+          className="w-full flex items-center justify-between gap-4 py-4 text-left text-lg font-medium"
+        >
+          {item.question}
+          <motion.span
+            animate={{ rotate: open ? 45 : 0 }}
+            transition={{ duration: 0.3, ease: EASE }}
+            className="shrink-0 text-muted"
+          >
+            <Plus size={18} />
+          </motion.span>
+        </button>
+      </h3>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            id={id}
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.35, ease: EASE }}
+            className="overflow-hidden"
+          >
+            <p className="text-muted pb-5 max-w-2xl">{item.answer}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
 const Questions = () => (
   <Shell id="questions" className="py-20 lg:py-28">
     <div className="grid lg:grid-cols-3 gap-10">
-      <Heading>Questions</Heading>
-      <div className="lg:col-span-2 border-t border-line">
-        {QUESTIONS.map((item) => (
-          <details key={item.question} className="group border-b border-line">
-            <summary className="flex items-center justify-between gap-4 py-4 text-lg font-medium cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-              {item.question}
-              <Plus size={18} className="shrink-0 text-muted transition-transform group-open:rotate-45" />
-            </summary>
-            <p className="text-muted pb-5 max-w-2xl">{item.answer}</p>
-          </details>
+      <Reveal>
+        <Heading>Questions</Heading>
+      </Reveal>
+      <Reveal delay={0.1} className="lg:col-span-2 border-t border-line">
+        {QUESTIONS.map((item, index) => (
+          <Question key={item.question} item={item} index={index} />
         ))}
-      </div>
+      </Reveal>
     </div>
   </Shell>
 );
+
+// The headline rises word by word from behind a mask
+const HEADLINE = "Is your money set up for the life you want?";
+
+const Headline = () => (
+  <h1
+    aria-label={HEADLINE}
+    className="font-display text-[clamp(3rem,6.6vw,5.75rem)] leading-[1.02] tracking-tight"
+  >
+    {HEADLINE.split(" ").map((word, index) => (
+      <React.Fragment key={index}>
+        <span aria-hidden="true" className="inline-block overflow-hidden pb-[0.14em] -mb-[0.14em] align-top">
+          <motion.span
+            className="inline-block"
+            initial={{ y: "110%" }}
+            animate={{ y: 0 }}
+            transition={{ duration: 0.9, ease: EASE, delay: 0.1 + index * 0.05 }}
+          >
+            {word}
+          </motion.span>
+        </span>{" "}
+      </React.Fragment>
+    ))}
+  </h1>
+);
+
+const Header = ({ isSignedIn, startLink }) => {
+  const { scrollY } = useScroll();
+  const [scrolled, setScrolled] = useState(false);
+  useMotionValueEvent(scrollY, "change", (y) => setScrolled(y > 8));
+
+  return (
+    <header
+      className={`sticky top-0 z-30 border-b transition-[background-color,border-color,backdrop-filter] duration-300 ${
+        scrolled
+          ? "bg-canvas/85 backdrop-blur-md border-line"
+          : "bg-canvas/0 border-transparent"
+      }`}
+    >
+      <div className="max-w-6xl mx-auto px-4 lg:px-8 h-16 flex items-center justify-between gap-6">
+        <Link to="/" aria-label="Munim.AI home">
+          <Logo className="text-lg" />
+        </Link>
+        <nav aria-label="Page sections" className="hidden md:flex items-center gap-6 text-muted">
+          {ANCHORS.map((anchor) => (
+            <a key={anchor.href} href={anchor.href} className="hover:text-ink transition-colors">
+              {anchor.label}
+            </a>
+          ))}
+        </nav>
+        <nav aria-label="Account" className="flex items-center gap-2">
+          {!isSignedIn && (
+            <Link to="/sign-in" className="px-3 h-9 inline-flex items-center text-muted hover:text-ink transition-colors">
+              Sign in
+            </Link>
+          )}
+          <Link
+            to={startLink}
+            className="px-4 h-9 inline-flex items-center rounded-lg bg-accent text-canvas font-medium hover:bg-accent-hover active:scale-[0.97] transition-[background-color,transform] whitespace-nowrap"
+          >
+            {isSignedIn ? "Open Munim.AI" : "Get started"}
+          </Link>
+        </nav>
+      </div>
+    </header>
+  );
+};
 
 const ANCHORS = [
   { href: "#how-it-works", label: "How it works" },
@@ -660,59 +932,48 @@ export default function LandingPage() {
   const startLabel = isSignedIn ? "Open Munim.AI" : "Find my risk profile";
 
   return (
+    <MotionConfig reducedMotion="user">
     <div className="min-h-screen bg-canvas text-ink">
-      <header className="sticky top-0 z-30 bg-canvas/95 backdrop-blur border-b border-line">
-        <div className="max-w-6xl mx-auto px-4 lg:px-8 h-16 flex items-center justify-between gap-6">
-          <Link to="/" aria-label="Munim.AI home">
-            <Logo className="text-lg" />
-          </Link>
-          <nav aria-label="Page sections" className="hidden md:flex items-center gap-6 text-muted">
-            {ANCHORS.map((anchor) => (
-              <a key={anchor.href} href={anchor.href} className="hover:text-ink transition-colors">
-                {anchor.label}
-              </a>
-            ))}
-          </nav>
-          <nav aria-label="Account" className="flex items-center gap-2">
-            {!isSignedIn && (
-              <Link to="/sign-in" className="px-3 h-9 inline-flex items-center text-muted hover:text-ink transition-colors">
-                Sign in
-              </Link>
-            )}
-            <Link
-              to={startLink}
-              className="px-4 h-9 inline-flex items-center rounded-lg bg-accent text-canvas font-medium hover:bg-accent-hover transition-colors whitespace-nowrap"
-            >
-              {isSignedIn ? "Open Munim.AI" : "Get started"}
-            </Link>
-          </nav>
-        </div>
-      </header>
+      <Header isSignedIn={isSignedIn} startLink={startLink} />
 
       <main>
         <section className="max-w-6xl mx-auto px-4 lg:px-8 py-14 lg:py-16 lg:min-h-[calc(100svh-4rem)] grid lg:grid-cols-12 gap-12 lg:gap-16 items-center">
           <div className="lg:col-span-7">
-            <h1 className="font-display text-[clamp(3rem,6.6vw,5.75rem)] leading-[1.02] tracking-tight">
-              Is your money set up for the life you want?
-            </h1>
-            <p className="text-xl text-muted mt-7 max-w-lg">
+            <Headline />
+            <motion.p
+              className="text-xl text-muted mt-7 max-w-lg"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, ease: EASE, delay: 0.6 }}
+            >
               Munim.AI brings your investments, spending and goals into one
               picture, and shows how it compares with the risk that's right
               for you.
-            </p>
-            <Link
-              to={startLink}
-              className="mt-9 px-6 h-12 inline-flex items-center rounded-lg bg-accent text-canvas text-lg font-medium hover:bg-accent-hover transition-colors"
+            </motion.p>
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, ease: EASE, delay: 0.72 }}
             >
-              {startLabel}
-            </Link>
+              <Link
+                to={startLink}
+                className="mt-9 px-6 h-12 inline-flex items-center rounded-lg bg-accent text-canvas text-lg font-medium hover:bg-accent-hover active:scale-[0.98] transition-[background-color,transform]"
+              >
+                {startLabel}
+              </Link>
+            </motion.div>
           </div>
-          <div className="lg:col-span-5">
+          <motion.div
+            className="lg:col-span-5"
+            initial={{ opacity: 0, y: 32 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1, ease: EASE, delay: 0.4 }}
+          >
             <MixFinder />
             <p className="text-sm text-muted mt-3">
               A quick illustration. The full questionnaire has ten questions.
             </p>
-          </div>
+          </motion.div>
         </section>
 
         <HowItWorks />
@@ -748,17 +1009,17 @@ export default function LandingPage() {
         <Questions />
 
         <section className="bg-accent text-canvas">
-          <div className="max-w-6xl mx-auto px-4 lg:px-8 py-20 lg:py-28 flex flex-col md:flex-row md:items-center justify-between gap-8">
+          <Reveal className="max-w-6xl mx-auto px-4 lg:px-8 py-20 lg:py-28 flex flex-col md:flex-row md:items-center justify-between gap-8">
             <Heading className="max-w-xl">
               Start with ten questions. See your numbers after that.
             </Heading>
             <Link
               to={startLink}
-              className="shrink-0 px-6 h-12 inline-flex items-center justify-center rounded-lg bg-canvas text-accent text-lg font-medium hover:bg-accent-soft transition-colors"
+              className="shrink-0 px-6 h-12 inline-flex items-center justify-center rounded-lg bg-canvas text-accent text-lg font-medium hover:bg-accent-soft active:scale-[0.98] transition-[background-color,transform]"
             >
               {isSignedIn ? "Open Munim.AI" : "Create your account"}
             </Link>
-          </div>
+          </Reveal>
         </section>
       </main>
 
@@ -771,5 +1032,6 @@ export default function LandingPage() {
         </p>
       </footer>
     </div>
+    </MotionConfig>
   );
 }
