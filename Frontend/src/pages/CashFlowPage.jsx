@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { Download, Pencil, Plus, Trash2, Upload } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { Download, Pencil, Plus, Trash2, Upload, Wand2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
 import { api } from "../lib/api";
@@ -31,9 +31,10 @@ import {
   Select,
   Skeleton,
   Stat,
-  Tabs,
+  StatStrip,
   useToast,
 } from "../components/ui";
+import useNewParam from "../lib/useNewParam";
 
 const PAGE_SIZE = 25;
 const CATEGORIES = [
@@ -160,6 +161,7 @@ const TransactionsTab = () => {
   const [removing, setRemoving] = useState(null);
   const [importing, setImporting] = useState(false);
   const fileInput = useRef(null);
+  useNewParam("transaction", useCallback(() => setEditing("new"), []));
 
   const load = useCallback(async () => {
     try {
@@ -271,7 +273,10 @@ const TransactionsTab = () => {
             <option key={name}>{name}</option>
           ))}
         </Select>
-        <div className="flex gap-2 @3xl:ml-auto">
+        <div className="flex flex-wrap gap-2 @3xl:ml-auto">
+          <Link to="/money/rules" className="inline-flex items-center gap-2 h-9 px-3 rounded-lg text-sm font-medium text-muted hover:text-ink hover:bg-wash">
+            <Wand2 size={16} /> Rules
+          </Link>
           <input ref={fileInput} type="file" hidden accept=".xlsx,.xls,.csv,.pdf" onChange={handleImport} />
           <Button variant="secondary" disabled={importing} onClick={() => fileInput.current.click()}>
             <Upload size={16} /> {importing ? "Importing..." : "Import"}
@@ -451,50 +456,72 @@ const BudgetsTab = ({ budgets }) => {
   const toast = useToast();
   const [editing, setEditing] = useState(null);
   const [removing, setRemoving] = useState(null);
+  useNewParam("budget", useCallback(() => setEditing("new"), []));
+
+  const total = budgets.reduce((sum, budget) => sum + budget.budgetAmount, 0);
+  const spent = budgets.reduce((sum, budget) => sum + budget.spentAmount, 0);
+  const over = budgets.filter((budget) => budget.status === "over-budget").length;
 
   return (
     <>
-      <div className="flex justify-end mb-4">
+      <PageHeader description="Limits for the categories you want to watch, counted from your transactions.">
         <Button onClick={() => setEditing("new")}>
           <Plus size={16} /> Add budget
         </Button>
-      </div>
+      </PageHeader>
       {budgets.length === 0 ? (
         <Card>
           <EmptyState
             title="No budgets yet"
             description="Set a limit for a category and see how close you are as you spend."
-          />
+          >
+            <Button onClick={() => setEditing("new")}>Add your first budget</Button>
+          </EmptyState>
         </Card>
       ) : (
-        <div className="grid md:grid-cols-2 gap-4">
-          {budgets.map((budget) => (
-            <Card key={budget.id} className="p-5">
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div>
-                  <p className="font-medium">{budget.category}</p>
-                  <p className="text-sm text-muted tnum">
-                    {formatMoney(budget.spentAmount)} of {formatMoney(budget.budgetAmount)}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Badge tone={STATUS[budget.status].tone}>{STATUS[budget.status].label}</Badge>
-                  <IconButton label={`Edit ${budget.category} budget`} onClick={() => setEditing(budget)}>
-                    <Pencil size={15} />
-                  </IconButton>
-                  <IconButton label={`Delete ${budget.category} budget`} onClick={() => setRemoving(budget)}>
-                    <Trash2 size={15} />
-                  </IconButton>
-                </div>
-              </div>
-              <Progress
-                value={budget.percentUsed}
-                tone={budget.status === "over-budget" ? "loss" : "accent"}
-                label={`${budget.category} budget used`}
-              />
-            </Card>
-          ))}
-        </div>
+        <>
+          <StatStrip>
+            <Stat label="Budgeted" value={formatMoney(total)} />
+            <Stat label="Spent so far" value={formatMoney(spent)} />
+            <Stat label="Left" value={formatMoney(Math.max(total - spent, 0))} />
+            <Stat label="Over the limit" value={`${over} of ${budgets.length}`} />
+          </StatStrip>
+          <Card>
+            <ul className="divide-y divide-line">
+              {[...budgets].sort((a, b) => b.percentUsed - a.percentUsed).map((budget) => (
+                <li key={budget.id} className="grid grid-cols-[1fr_auto] @2xl:grid-cols-[11rem_1fr_9rem_auto] items-center gap-x-5 gap-y-2 px-5 py-4">
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{budget.category}</p>
+                    <p className="text-sm text-muted capitalize">{budget.period}</p>
+                  </div>
+                  <div className="order-last col-span-2 @2xl:order-none @2xl:col-span-1">
+                    <Progress
+                      value={budget.percentUsed}
+                      tone={budget.status === "over-budget" ? "loss" : budget.status === "on-track" ? "accent" : "gain"}
+                      label={`${budget.category} budget used`}
+                    />
+                  </div>
+                  <div className="hidden @2xl:block text-right">
+                    <p className="tnum">{formatMoney(budget.spentAmount)}</p>
+                    <p className="text-sm text-muted tnum">of {formatMoney(budget.budgetAmount)}</p>
+                  </div>
+                  <div className="flex items-center justify-end gap-1">
+                    <span className="@2xl:hidden text-sm tnum text-muted mr-1">
+                      {formatMoney(budget.spentAmount)} / {formatMoney(budget.budgetAmount)}
+                    </span>
+                    <Badge tone={STATUS[budget.status].tone}>{STATUS[budget.status].label}</Badge>
+                    <IconButton label={`Edit ${budget.category} budget`} onClick={() => setEditing(budget)}>
+                      <Pencil size={15} />
+                    </IconButton>
+                    <IconButton label={`Delete ${budget.category} budget`} onClick={() => setRemoving(budget)}>
+                      <Trash2 size={15} />
+                    </IconButton>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </>
       )}
 
       {editing && (
@@ -520,14 +547,6 @@ const BudgetsTab = ({ budgets }) => {
   );
 };
 
-const TABS = [
-  { value: "transactions", label: "Transactions" },
-  { value: "budgets", label: "Budgets" },
-  { value: "recurring", label: "Recurring" },
-  { value: "upcoming", label: "Upcoming" },
-  { value: "rules", label: "Rules" },
-];
-
 const CADENCE = { weekly: "Weekly", monthly: "Monthly", quarterly: "Every 3 months", yearly: "Yearly" };
 
 const RecurringTab = ({ recurring }) => {
@@ -545,14 +564,14 @@ const RecurringTab = ({ recurring }) => {
 
   return (
     <>
-      <div className="grid grid-cols-2 @3xl:grid-cols-3 gap-6 mb-6">
-        <Stat label="Recurring each month" value={formatMoney(monthly)} />
-        <Stat label="Subscriptions" value={formatMoney(subscriptions.reduce((sum, item) => sum + item.monthlyCost, 0))}>
-          <span className="text-muted">{subscriptions.length} active</span>
-        </Stat>
-      </div>
       <Card>
-        <ul className="divide-y divide-line">
+        <div className="p-5 pb-3">
+          <SectionTitle
+            title="Recurring payments"
+            description={`${formatMoney(monthly)} a month in all, ${formatMoney(subscriptions.reduce((sum, item) => sum + item.monthlyCost, 0))} of it on ${subscriptions.length} ${subscriptions.length === 1 ? "subscription" : "subscriptions"}. Found from your transactions.`}
+          />
+        </div>
+        <ul className="divide-y divide-line border-t border-line">
           {recurring.map((item) => (
             <li key={item.key} className={`flex items-start justify-between gap-4 px-5 py-3 ${item.active ? "" : "opacity-60"}`}>
               <div className="min-w-0">
@@ -768,48 +787,49 @@ const RulesTab = () => {
   );
 };
 
-export default function CashFlowPage() {
-  const [params, setParams] = useSearchParams();
-  const tab = TABS.some((item) => item.value === params.get("tab")) ? params.get("tab") : "transactions";
+const Activity = ({ cashflow, spending }) => (
+  <>
+    <StatStrip>
+      <Stat label="Income this month" value={formatMoney(cashflow.thisMonth.income)} />
+      <Stat label="Spent this month" value={formatMoney(cashflow.thisMonth.expense)} />
+      <Stat label="Usual monthly spending" value={formatMoney(cashflow.averageMonthlyExpense)} />
+      <Stat label="Savings rate" value={`${cashflow.savingsRate}%`} />
+    </StatStrip>
 
+    <div className="grid @3xl:grid-cols-5 gap-4 mb-10">
+      <Card className="@3xl:col-span-3 p-5">
+        <SectionTitle title="Income and spending" description="Last 12 months" />
+        <CashFlowChart months={cashflow.months} />
+      </Card>
+      <Card className="@3xl:col-span-2 p-5">
+        <SectionTitle title="Where it went" description="Last 90 days" />
+        {spending.length ? (
+          <SpendingBars rows={spending} />
+        ) : (
+          <p className="text-muted">No spending in the last 90 days.</p>
+        )}
+      </Card>
+    </div>
+
+    <h2 className="text-lg font-semibold mb-4">Transactions</h2>
+    <TransactionsTab />
+  </>
+);
+
+export default function CashFlowPage({ view = "activity" }) {
   return (
     <Loaded>
       {({ cashflow, spending, budgets, recurring, upcoming }) => (
         <>
-          <PageHeader title="Cash flow" description="What comes in, what goes out and what's left." />
-
-          <div className="grid grid-cols-2 @3xl:grid-cols-4 gap-6 mb-8">
-            <Stat label="Income this month" value={formatMoney(cashflow.thisMonth.income)} />
-            <Stat label="Spending this month" value={formatMoney(cashflow.thisMonth.expense)} />
-            <Stat label="Average monthly spending" value={formatMoney(cashflow.averageMonthlyExpense)} />
-            <Stat label="Savings rate" value={`${cashflow.savingsRate}%`} />
-          </div>
-
-          <div className="grid @3xl:grid-cols-5 gap-6 mb-8">
-            <Card className="@3xl:col-span-3 p-5">
-              <SectionTitle title="Income and spending" description="Last 12 months" />
-              <CashFlowChart months={cashflow.months} />
-            </Card>
-            <Card className="@3xl:col-span-2 p-5">
-              <SectionTitle title="Top categories" description="Last 90 days" />
-              {spending.length ? (
-                <SpendingBars rows={spending} />
-              ) : (
-                <p className="text-muted">No spending in the last 90 days.</p>
-              )}
-            </Card>
-          </div>
-
-          <Tabs
-            value={tab}
-            onChange={(value) => setParams(value === "transactions" ? {} : { tab: value })}
-            tabs={TABS}
-          />
-          {tab === "budgets" && <BudgetsTab budgets={budgets} />}
-          {tab === "recurring" && <RecurringTab recurring={recurring} />}
-          {tab === "upcoming" && <UpcomingTab upcoming={upcoming} />}
-          {tab === "rules" && <RulesTab />}
-          {tab === "transactions" && <TransactionsTab />}
+          {view === "activity" && <Activity cashflow={cashflow} spending={spending} />}
+          {view === "budgets" && <BudgetsTab budgets={budgets} />}
+          {view === "bills" && (
+            <div className="space-y-6">
+              <UpcomingTab upcoming={upcoming} />
+              <RecurringTab recurring={recurring} />
+            </div>
+          )}
+          {view === "rules" && <RulesTab />}
         </>
       )}
     </Loaded>

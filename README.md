@@ -4,18 +4,18 @@ An investing and personal finance app for people in India. Users answer an inves
 
 ## Features
 
-- **Home**: net worth history, financial health score, a weekly note written by AI, insights, what's coming up, and "Ask about this" buttons
-- **Portfolio**: stocks, mutual funds, FDs, RDs, PPF, NPS, gold bonds and EPF, with daily NAVs from AMFI and NSE prices, yearly return (XIRR) per holding against the Nifty 50, a SIP tracker, goal links, a rebalancing plan, and CAMS, KFintech, NSDL or CDSL statement import
-- **Cash flow**: transactions, budgets, recurring payments and subscriptions, a calendar of what's due, categorisation rules that learn from corrections, AI categorisation, spreadsheet or PDF import, and CSV export
-- **Accounts**: bank accounts, property, vehicles, debts with EMI dates, insurance with a cover check, and credit score
-- **Goals**: projections from linked investments and SIPs, with on-track or behind status
-- **Tax**: old against new regime, 80C and 80D found in your records, capital gains this year, and tax-loss and tax-free gain harvesting
-- **Calculators**: SIP, retirement corpus, prepay a loan or invest, and debt payoff, started from your own numbers
-- **Reports**: monthly statements with a forecast, as CSV or printed to PDF
+The app is organised into four sections, with the assistant one keystroke away from any of them:
+
+- **Today**: net worth and its trend, financial health, what needs your attention (budgets over, bills due, insights) with "Ask what to do" buttons, a weekly summary written by AI, and short summaries of the month, investments and goals
+- **Money**: transactions with spreadsheet or PDF import and CSV export, budgets, bills and subscriptions (what's due and what recurs), categorisation rules that learn from corrections, and monthly statements as CSV or PDF
+- **Wealth**: net worth broken down by what you own and owe, a forecast with the year you'd reach financial independence, investments (stocks, mutual funds, FDs, RDs, PPF, NPS, gold bonds and EPF with daily NAVs from AMFI and NSE prices, XIRR against the Nifty 50, a SIP tracker and a rebalancing plan), and accounts and loans (banks, property, vehicles, debts with EMI dates, insurance with a cover check, credit score)
+- **Plan**: goals with projections and a "what if I put in more" slider, tax (old against new regime, 80C and 80D, capital gains, tax-loss and tax-free gain harvesting), and calculators for SIPs, retirement, loan prepayment and debt payoff
+- **Import**: one place to drop a mutual fund CAS, a demat statement or a bank statement; Munim guesses which it is and shows what it found before saving
+- **Search and commands**: ⌘K jumps to any page, adds a transaction, budget, goal or investment, searches transactions, or sends a question to the assistant; ⌘J opens the assistant
 - **Assistant**: looks things up with tools, proposes budgets, goals, rules and bill reminders for you to confirm, draws charts, suggests follow-ups, remembers what you ask it to, replies in English, Hindi or Hinglish, and takes voice input
 - **Notifications**: bills and EMIs due, budgets nearly used, missed SIPs, goals behind, duplicate charges and price rises, plus a Monday summary email
 - **Settings**: profile, risk profile, what the assistant can see, assistant language and memory, weekly email, data export, password and account deletion
-- Dark mode, and a privacy mode that blurs amounts
+- A privacy mode that blurs amounts
 
 New accounts start empty, and can load clearly labelled sample data.
 

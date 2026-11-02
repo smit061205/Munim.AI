@@ -13,9 +13,9 @@ import { AlertCircle, Check, X } from "lucide-react";
 import { formatMoney, formatPercent } from "../lib/format";
 
 const BUTTON_VARIANTS = {
-  primary: "bg-accent text-canvas hover:bg-accent-hover",
+  primary: "bg-accent text-surface hover:bg-accent-hover shadow-sm",
   secondary:
-    "bg-surface text-ink border border-line-strong hover:bg-wash",
+    "bg-surface text-ink border border-line-strong hover:bg-wash hover:border-faint/50",
   ghost: "text-muted hover:text-ink hover:bg-wash",
   danger: "bg-loss text-white hover:opacity-90",
 };
@@ -29,8 +29,8 @@ export const Button = ({
 }) => (
   <button
     type={type}
-    className={`inline-flex items-center justify-center gap-2 rounded-lg font-medium whitespace-nowrap transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-      size === "sm" ? "h-8 px-3 text-sm" : "h-10 px-4 text-[15px]"
+    className={`inline-flex items-center justify-center gap-2 rounded-lg font-medium whitespace-nowrap transition-[background-color,border-color,transform] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${
+      size === "sm" ? "h-8 px-3 text-sm" : "h-9 px-3.5 text-sm"
     } ${BUTTON_VARIANTS[variant]} ${className}`}
     {...props}
   />
@@ -48,22 +48,36 @@ export const IconButton = ({ label, className = "", ...props }) => (
 
 export const Card = ({ className = "", ...props }) => (
   <section
-    className={`bg-surface border border-line rounded-xl ${className}`}
+    className={`bg-surface border border-line rounded-2xl shadow-[var(--shadow-raise)] ${className}`}
     {...props}
   />
 );
 
-export const PageHeader = ({ title, description, children }) => (
-  <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
-    <div>
-      <h1 className="text-[28px] leading-tight font-semibold tracking-tight">
-        {title}
-      </h1>
-      {description && <p className="text-muted mt-1">{description}</p>}
+// Inside a section (Money, Wealth, Plan) the section owns the big title, so a
+// page header becomes a line of context with the page's actions beside it
+export const SectionContext = createContext(false);
+
+export const PageHeader = ({ title, description, children }) => {
+  const inSection = useContext(SectionContext);
+  if (inSection) {
+    if (!description && !children) return null;
+    return (
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        {description ? <p className="text-muted max-w-2xl">{description}</p> : <span />}
+        {children && <div className="flex flex-wrap gap-2 no-print">{children}</div>}
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
+      <div>
+        <h1 className="font-display text-[32px] leading-tight">{title}</h1>
+        {description && <p className="text-muted mt-1.5 max-w-2xl">{description}</p>}
+      </div>
+      {children && <div className="flex flex-wrap gap-2 no-print">{children}</div>}
     </div>
-    {children && <div className="flex flex-wrap gap-2 no-print">{children}</div>}
-  </div>
-);
+  );
+};
 
 export const SectionTitle = ({ title, description, children }) => (
   <div className="flex items-start justify-between gap-4 mb-4">
@@ -95,10 +109,21 @@ export const Delta = ({ value, percent, className = "" }) => {
 };
 
 export const Stat = ({ label, value, children }) => (
-  <div>
+  <div className="min-w-0">
     <p className="text-sm text-muted">{label}</p>
-    <p className="text-2xl font-semibold tracking-tight tnum mt-1">{value}</p>
-    {children && <div className="text-sm mt-1">{children}</div>}
+    <p className="text-[22px] font-semibold tracking-tight tnum mt-1 truncate">{value}</p>
+    {children && <div className="text-sm mt-0.5">{children}</div>}
+  </div>
+);
+
+// A row of related figures in one panel, divided rather than boxed separately
+export const StatStrip = ({ children, className = "" }) => (
+  <div className={`grid grid-cols-2 @3xl:grid-flow-col @3xl:auto-cols-fr bg-surface border border-line rounded-2xl shadow-[var(--shadow-raise)] mb-6 overflow-hidden ${className}`}>
+    {React.Children.toArray(children).filter(Boolean).map((child, index) => (
+      <div key={index} className="px-5 py-4 border-line [&:nth-child(n+3)]:border-t @3xl:[&:nth-child(n+3)]:border-t-0 [&:nth-child(even)]:border-l @3xl:[&:not(:first-child)]:border-l">
+        {child}
+      </div>
+    ))}
   </div>
 );
 
@@ -112,7 +137,7 @@ const BADGE_TONES = {
 
 export const Badge = ({ tone = "neutral", children }) => (
   <span
-    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ${BADGE_TONES[tone]}`}
+    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium whitespace-nowrap ${BADGE_TONES[tone]}`}
   >
     {children}
   </span>
@@ -173,17 +198,17 @@ export const Toggle = ({ checked, onChange, label, description }) => {
 };
 
 export const Tabs = ({ tabs, value, onChange }) => (
-  <div role="tablist" className="flex gap-6 border-b border-line mb-6 overflow-x-auto">
+  <div role="tablist" className="inline-flex max-w-full gap-1 p-1 mb-6 rounded-xl bg-wash overflow-x-auto scrollbar-none">
     {tabs.map((tab) => (
       <button
         key={tab.value}
         role="tab"
         aria-selected={value === tab.value}
         onClick={() => onChange(tab.value)}
-        className={`pb-2.5 -mb-px border-b-2 font-medium whitespace-nowrap transition-colors ${
+        className={`h-8 px-3 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
           value === tab.value
-            ? "border-accent text-ink"
-            : "border-transparent text-muted hover:text-ink"
+            ? "bg-surface text-ink shadow-sm"
+            : "text-muted hover:text-ink"
         }`}
       >
         {tab.label}
@@ -256,7 +281,7 @@ export const Modal = ({ title, description, onClose, children }) => {
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div
-        className="absolute inset-0 bg-ink/30"
+        className="absolute inset-0 bg-ink/40 backdrop-blur-[2px]"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -265,7 +290,7 @@ export const Modal = ({ title, description, onClose, children }) => {
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative w-full sm:max-w-md max-h-[90vh] overflow-y-auto bg-surface rounded-t-xl sm:rounded-xl border border-line p-6"
+        className="relative w-full sm:max-w-md max-h-[90vh] overflow-y-auto bg-surface rounded-t-2xl sm:rounded-2xl border border-line shadow-[var(--shadow-float)] p-6"
       >
         <div className="flex items-start justify-between gap-4 mb-5">
           <div>
@@ -399,7 +424,7 @@ export const ToastProvider = ({ children }) => {
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className="flex items-start gap-2 px-4 py-3 rounded-lg bg-ink text-canvas text-sm"
+            className="flex items-start gap-2 px-4 py-3 rounded-xl bg-ink text-canvas text-sm shadow-[var(--shadow-float)]"
           >
             {toast.tone === "error" ? (
               <AlertCircle size={18} className="shrink-0" />

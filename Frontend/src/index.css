@@ -1,24 +1,24 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Newsreader", Georgia, serif;
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;
 
-  --color-canvas: #fdfdfc;
+  --color-canvas: #f4f5f7;
   --color-surface: #ffffff;
-  --color-wash: #f4f4f1;
-  --color-line: #e8e8e4;
-  --color-line-strong: #d4d4ce;
-  --color-ink: #0f1b2d;
-  --color-muted: #5b6675;
-  --color-faint: #7f8894;
+  --color-wash: #eef0f3;
+  --color-line: #e3e6eb;
+  --color-line-strong: #cdd2da;
+  --color-ink: #0e1726;
+  --color-muted: #556070;
+  --color-faint: #848d9b;
 
-  --color-accent: #1b2b4b;
-  --color-accent-hover: #2a3d63;
-  --color-accent-soft: #e9ecf2;
+  --color-accent: #2c42b5;
+  --color-accent-hover: #2337a0;
+  --color-accent-soft: #e9ecfb;
 
   --color-gain: #0e7c52;
-  --color-gain-soft: #e6f3ee;
+  --color-gain-soft: #e4f3ec;
   --color-loss: #c03a2b;
   --color-loss-soft: #fbecea;
   --color-warn: #8f6200;
@@ -30,35 +30,14 @@
   --color-series-4: #8b62c4;
   --color-series-5: #d5614a;
   --color-series-other: #a3a9b1;
+
+  --shadow-raise: 0 1px 2px rgb(14 23 38 / 0.04), 0 4px 16px -8px rgb(14 23 38 / 0.08);
+  --shadow-float: 0 12px 40px -12px rgb(14 23 38 / 0.25), 0 2px 6px rgb(14 23 38 / 0.06);
 }
 
 html {
   color-scheme: light;
   -webkit-text-size-adjust: 100%;
-}
-
-/* Dark mode: the same tokens, stepped for a dark surface */
-html[data-theme="dark"] {
-  color-scheme: dark;
-  --color-canvas: #0f141c;
-  --color-surface: #161c26;
-  --color-wash: #1e2531;
-  --color-line: #273040;
-  --color-line-strong: #36404f;
-  --color-ink: #e7eaef;
-  --color-muted: #9ba4b1;
-  --color-faint: #7c8592;
-
-  --color-accent: #b9c8e8;
-  --color-accent-hover: #d0dbf1;
-  --color-accent-soft: #1f2a3e;
-
-  --color-gain: #4cc38a;
-  --color-gain-soft: #12261d;
-  --color-loss: #f07a6c;
-  --color-loss-soft: #2d1816;
-  --color-warn: #e2b24c;
-  --color-warn-soft: #2a2213;
 }
 
 /* Privacy mode hides amounts, e.g. when sharing a screen */
@@ -78,11 +57,32 @@ body {
   font-family: var(--font-sans);
   font-size: 15px;
   line-height: 1.5;
+  font-feature-settings: "ss01";
   -webkit-font-smoothing: antialiased;
 }
 
 .tnum {
   font-variant-numeric: tabular-nums;
+}
+
+.font-display {
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+/* The one big figure on a page */
+.figure {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }
 
 :focus-visible {

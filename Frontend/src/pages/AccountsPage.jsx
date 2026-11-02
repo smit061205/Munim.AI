@@ -16,6 +16,7 @@ import {
   PageHeader,
   Select,
   Stat,
+  StatStrip,
   useToast,
 } from "../components/ui";
 
@@ -297,12 +298,12 @@ export default function AccountsPage() {
             description="Everything you own and owe, outside your portfolio."
           />
 
-          <div className="grid grid-cols-2 @3xl:grid-cols-4 gap-6 mb-8">
+          <StatStrip>
             <Stat label="Cash" value={formatMoney(assets.cash)} />
             <Stat label="Total assets" value={formatMoney(netWorth.grossAssets)} />
             <Stat label="Total debt" value={formatMoney(liabilities.total)} />
             <Stat label="Monthly EMIs" value={formatMoney(liabilities.monthlyPayment)} />
-          </div>
+          </StatStrip>
 
           <div className="grid @3xl:grid-cols-2 gap-6">
             <RecordList

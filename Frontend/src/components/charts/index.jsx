@@ -21,7 +21,7 @@ import {
   formatMonthShort,
 } from "../../lib/format";
 
-// Theme tokens, so charts follow dark mode
+// Theme tokens, so charts share the app's colours
 const COLORS = {
   ink: "var(--color-ink)",
   muted: "var(--color-muted)",

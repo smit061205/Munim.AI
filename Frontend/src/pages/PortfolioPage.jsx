@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { FileUp, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
@@ -22,9 +22,11 @@ import {
   SectionTitle,
   Select,
   Stat,
+  StatStrip,
   Toggle,
   useToast,
 } from "../components/ui";
+import useNewParam from "../lib/useNewParam";
 
 const FUND_CATEGORIES = ["Equity", "Index", "Debt", "Liquid", "Gold", "Hybrid"];
 
@@ -671,6 +673,7 @@ export default function PortfolioPage() {
   const [importing, setImporting] = useState(false);
   const [adding, setAdding] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  useNewParam("investment", useCallback(() => setAdding(true), []));
 
   const refreshPrices = async () => {
     setRefreshing(true);
@@ -692,8 +695,8 @@ export default function PortfolioPage() {
         return (
           <>
             <PageHeader
-              title="Portfolio"
-              description={`Your ${user.investorProfile.riskLabel.toLowerCase()} profile, as you hold it today.`}
+              title="Investments"
+              description={`Funds, shares and deposits at today's prices, against your ${user.investorProfile.riskLabel.toLowerCase()} target mix.`}
             >
               <Button variant="secondary" onClick={() => setImporting(true)}>
                 <FileUp size={16} /> Import statement
@@ -703,7 +706,7 @@ export default function PortfolioPage() {
               </Button>
             </PageHeader>
 
-            <div className="grid grid-cols-2 @3xl:grid-cols-4 gap-6 mb-8">
+            <StatStrip>
               <Stat label="Current value" value={formatMoney(portfolio.value)} />
               <Stat label="Invested" value={formatMoney(portfolio.invested)} />
               <Stat label="Gain" value={<Delta value={portfolio.gain} className="!font-semibold" />}>
@@ -716,7 +719,7 @@ export default function PortfolioPage() {
                   <span className="text-muted tnum">Nifty 50: {formatPercent(portfolio.returns.benchmark.xirr)}</span>
                 )}
               </Stat>
-            </div>
+            </StatStrip>
 
             <div className="grid @3xl:grid-cols-2 gap-6 mb-6">
               <ReturnsCard returns={portfolio.returns} pricesAsOf={portfolio.pricesAsOf} onRefresh={refreshPrices} refreshing={refreshing} />

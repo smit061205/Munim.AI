@@ -83,7 +83,7 @@ const OnboardingPage = () => {
             >
               <RiskProfileSummary profile={user.investorProfile} />
               <Link
-                to="/home"
+                to="/today"
                 className={`${primaryButtonClassName} mt-8`}
               >
                 Go to my home page

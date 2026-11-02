@@ -182,14 +182,18 @@ const describeFinances = (overview, allowed) => {
 
 // Pages the assistant can link to, so answers can send the user somewhere useful
 const PAGES = {
-  "/home": "Home: net worth, insights, upcoming payments",
-  "/portfolio": "Portfolio: holdings, returns vs Nifty 50, SIPs, imports",
-  "/cash-flow": "Cash flow: transactions, budgets, recurring payments, calendar, rules",
-  "/accounts": "Accounts: bank, property, debts, EPF, credit score, insurance",
-  "/goals": "Goals: targets, projections, linked investments",
-  "/tax": "Tax: regime comparison, 80C, capital gains, harvesting",
-  "/calculators": "Calculators: SIP, retirement, loan prepayment, debt payoff",
-  "/reports": "Reports: monthly statements",
+  "/today": "Today: net worth, what needs attention, the week in brief",
+  "/money": "Money: transactions, income and spending",
+  "/money/budgets": "Budgets: monthly limits by category",
+  "/money/bills": "Bills: upcoming payments, recurring payments and subscriptions",
+  "/money/statements": "Statements: monthly reports",
+  "/wealth": "Wealth: net worth, assets and debts",
+  "/wealth/investments": "Investments: holdings, returns vs Nifty 50, SIPs, rebalancing",
+  "/wealth/accounts": "Accounts: bank, property, debts, EPF, credit score, insurance",
+  "/plan": "Goals: targets, projections, linked investments",
+  "/plan/tax": "Tax: regime comparison, 80C, capital gains, harvesting",
+  "/plan/tools": "Calculators: SIP, retirement, loan prepayment, debt payoff",
+  "/import": "Import: bring in mutual fund, share and bank statements",
   "/settings": "Settings: profile, privacy, security, notifications, assistant memory",
 };
 
@@ -234,7 +238,7 @@ How to answer:
 - To change something (a budget, goal, category or bill reminder), use a propose_ tool. A card with Confirm and Dismiss buttons appears under your reply; say what you've proposed, not that it's done.
 - Earlier proposals show their status in the conversation. Never propose the same change again when one is already done or waiting. When asked whether something is set up, check with get_budgets, get_goals or get_upcoming_payments and answer from that.
 - Always write at least one sentence of reply, including after using a tool.
-- Link to the right page with markdown when it helps, e.g. [see your goals](/goals). Pages: ${Object.keys(PAGES).join(", ")}.
+- Link to the right page with markdown when it helps, e.g. [see your goals](/plan). Pages: ${Object.keys(PAGES).join(", ")}.
 - When spending_breakdown draws a chart, refer to it rather than repeating every number.
 - Keep investment guidance consistent with the user's risk profile and time horizon. Discuss asset classes and allocation; never tell them to buy or sell a specific stock or fund.
 - You explain and educate. You aren't a registered adviser, so for major decisions suggest a SEBI-registered adviser.

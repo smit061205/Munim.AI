@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { api } from "../lib/api";
 import { formatDayMonth, formatMoney, toDateInput } from "../lib/format";
@@ -19,6 +19,7 @@ import {
   Progress,
   useToast,
 } from "../components/ui";
+import useNewParam from "../lib/useNewParam";
 
 const STATUS = {
   "on-track": { tone: "gain", label: "On track" },
@@ -74,11 +75,138 @@ const GoalModal =({ goal, onClose }) => {
   );
 };
 
+const monthsUntil = (date) => {
+  const end = new Date(date);
+  const now = new Date();
+  return Math.max((end.getFullYear() - now.getFullYear()) * 12 + end.getMonth() - now.getMonth(), 0);
+};
+
+const annuity = (rate, months) => (rate === 0 ? months : ((1 + rate) ** months - 1) / rate);
+
+// Works out what the goal reaches with more money each month. The monthly
+// amount the server already assumes is recovered from its projection, so the
+// slider at zero matches the figure above it.
+const whatIf = (goal, extra) => {
+  const months = monthsUntil(goal.target_date);
+  const rate = (goal.rate || 0) / 1200;
+  const grown = goal.current * (1 + rate) ** months;
+  const base = months > 0 ? Math.max((goal.projected - grown) / annuity(rate, months), 0) : 0;
+  const monthly = base + extra;
+  const projected = grown + monthly * annuity(rate, months);
+
+  let value = goal.current;
+  let reachedIn = null;
+  for (let month = 1; month <= 600; month += 1) {
+    value = value * (1 + rate) + monthly;
+    if (value >= goal.target_amount) {
+      reachedIn = month;
+      break;
+    }
+  }
+  if (goal.current >= goal.target_amount) reachedIn = 0;
+  return { projected, reachedIn, months };
+};
+
+const monthLabel = (offset) => {
+  const date = new Date();
+  date.setMonth(date.getMonth() + offset);
+  return date.toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+};
+
+const WhatIf = ({ goal }) => {
+  const max = Math.max(Math.ceil((goal.extraMonthly || 0) * 2 / 1000) * 1000, 20000);
+  const [extra, setExtra] = useState(Math.min(Math.round((goal.extraMonthly || 5000) / 500) * 500, max));
+  const result = whatIf(goal, extra);
+  const early = result.reachedIn !== null ? result.months - result.reachedIn : null;
+
+  return (
+    <div className="mt-4 pt-4 border-t border-line">
+      <div className="flex items-baseline justify-between gap-3 mb-2">
+        <label htmlFor={`what-if-${goal.id}`} className="text-sm font-medium">Put in more each month</label>
+        <span className="tnum font-semibold">+{formatMoney(extra)}</span>
+      </div>
+      <input
+        id={`what-if-${goal.id}`}
+        type="range"
+        min="0"
+        max={max}
+        step="500"
+        value={extra}
+        onChange={(event) => setExtra(Number(event.target.value))}
+        className="w-full accent-[var(--color-accent)]"
+      />
+      <p className="text-sm mt-2">
+        You'd have <span className="tnum font-medium">{formatMoney(result.projected)}</span> by {formatDayMonth(goal.target_date)}
+        {result.reachedIn === null
+          ? ", still short of the target."
+          : early > 0
+            ? <>, reaching the target in <span className="font-medium">{monthLabel(result.reachedIn)}</span>, {early} {early === 1 ? "month" : "months"} early.</>
+            : early === 0
+              ? ", reaching the target right on time."
+              : <>, reaching the target in {monthLabel(result.reachedIn)}.</>}
+      </p>
+    </div>
+  );
+};
+
+const GoalCard = ({ goal, onEdit, onRemove }) => {
+  const [exploring, setExploring] = useState(false);
+  return (
+    <Card className="p-5 flex flex-col">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-medium truncate">{goal.name}</p>
+          <p className="text-sm text-muted">By {formatDayMonth(goal.target_date)}</p>
+        </div>
+        <div className="flex items-center gap-1">
+          <Badge tone={STATUS[goal.status].tone}>{STATUS[goal.status].label}</Badge>
+          <IconButton label={`Edit ${goal.name}`} onClick={() => onEdit(goal)}>
+            <Pencil size={15} />
+          </IconButton>
+          <IconButton label={`Delete ${goal.name}`} onClick={() => onRemove(goal)}>
+            <Trash2 size={15} />
+          </IconButton>
+        </div>
+      </div>
+      <p className="text-[28px] font-semibold tnum tracking-tight mt-4 leading-none">
+        {formatMoney(goal.current)}
+        <span className="text-base font-normal text-muted tracking-normal"> of {formatMoney(goal.target_amount)}</span>
+      </p>
+      <div className="mt-4 mb-3">
+        <Progress value={goal.progress} tone={goal.status === "behind" ? "loss" : goal.status === "on-track" ? "gain" : "accent"} label={`${goal.name} progress`} />
+      </div>
+      <p className="text-sm tnum">
+        {goal.status === "on-track"
+          ? `On course for ${formatMoney(goal.projected)}, growing at about ${goal.rate}% a year.`
+          : `On course for ${formatMoney(goal.projected)}. Another ${formatMoney(goal.extraMonthly)} a month closes the gap${goal.status === "covered-by-savings" ? ", which your saving covers" : ""}.`}
+      </p>
+      {goal.linked.length > 0 ? (
+        <p className="text-sm text-muted mt-2">
+          {formatMoney(goal.linkedValue)} in {goal.linked.map((item) => item.name).join(", ")}
+          {goal.linkedMonthly > 0 && `, plus ${formatMoney(goal.linkedMonthly)} a month in SIPs`}.
+        </p>
+      ) : (
+        <p className="text-sm text-muted mt-2">
+          Link investments to this goal on the <Link to="/wealth/investments" className="underline">Investments</Link> page to count them here.
+        </p>
+      )}
+      {exploring ? (
+        <WhatIf goal={goal} />
+      ) : (
+        <button onClick={() => setExploring(true)} className="mt-auto pt-4 self-start inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline">
+          <SlidersHorizontal size={14} /> What if I put in more?
+        </button>
+      )}
+    </Card>
+  );
+};
+
 export default function GoalsPage() {
   const { refresh } = useData();
   const toast = useToast();
   const [editing, setEditing] = useState(null);
   const [removing, setRemoving] = useState(null);
+  useNewParam("goal", useCallback(() => setEditing("new"), []));
 
   return (
     <Loaded>
@@ -109,45 +237,7 @@ export default function GoalsPage() {
           ) : (
             <div className="grid md:grid-cols-2 gap-4">
               {goals.map((goal) => (
-                <Card key={goal.id} className="p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-medium">{goal.name}</p>
-                      <p className="text-sm text-muted">By {formatDayMonth(goal.target_date)}</p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Badge tone={STATUS[goal.status].tone}>{STATUS[goal.status].label}</Badge>
-                      <IconButton label={`Edit ${goal.name}`} onClick={() => setEditing(goal)}>
-                        <Pencil size={15} />
-                      </IconButton>
-                      <IconButton label={`Delete ${goal.name}`} onClick={() => setRemoving(goal)}>
-                        <Trash2 size={15} />
-                      </IconButton>
-                    </div>
-                  </div>
-                  <p className="text-2xl font-semibold tnum tracking-tight mt-4">
-                    {formatMoney(goal.current)}
-                    <span className="text-base font-normal text-muted"> of {formatMoney(goal.target_amount)}</span>
-                  </p>
-                  <div className="mt-3 mb-3">
-                    <Progress value={goal.progress} tone={goal.status === "behind" ? "loss" : "accent"} label={`${goal.name} progress`} />
-                  </div>
-                  <p className="text-sm tnum">
-                    {goal.status === "on-track"
-                      ? `On course for ${formatMoney(goal.projected)}, growing at about ${goal.rate}% a year.`
-                      : `On course for ${formatMoney(goal.projected)}. Another ${formatMoney(goal.extraMonthly)} a month closes the gap${goal.status === "covered-by-savings" ? ", which your saving covers" : ""}.`}
-                  </p>
-                  {goal.linked.length > 0 ? (
-                    <p className="text-sm text-muted mt-2">
-                      {formatMoney(goal.linkedValue)} in {goal.linked.map((item) => item.name).join(", ")}
-                      {goal.linkedMonthly > 0 && `, plus ${formatMoney(goal.linkedMonthly)} a month in SIPs`}.
-                    </p>
-                  ) : (
-                    <p className="text-sm text-muted mt-2">
-                      Link investments to this goal on the <Link to="/portfolio" className="underline">Portfolio</Link> page to count them here.
-                    </p>
-                  )}
-                </Card>
+                <GoalCard key={goal.id} goal={goal} onEdit={setEditing} onRemove={setRemoving} />
               ))}
             </div>
           )}

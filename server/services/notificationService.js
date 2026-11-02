@@ -33,7 +33,7 @@ export const notify = async (userId, { key, kind, title, body, href }) => {
   }
 };
 
-const UPCOMING_HREF = { bill: "/cash-flow?tab=upcoming", emi: "/accounts", sip: "/portfolio", insurance: "/accounts", subscription: "/cash-flow?tab=recurring" };
+const UPCOMING_HREF = { bill: "/money/bills", emi: "/wealth/accounts", sip: "/wealth/investments", insurance: "/wealth/accounts", subscription: "/money/bills" };
 
 // Reminders worked out from the overview: payments due in the next three
 // days, unusual activity, missed SIPs, budgets nearly used and goals behind
@@ -52,12 +52,12 @@ export const syncNotifications = async (user, overview) => {
       kind: "bill",
       title: `${item.name} is due ${item.date === today ? "today" : `on ${item.date}`}`,
       body: item.amount ? `${money(item.amount)}` : undefined,
-      href: UPCOMING_HREF[item.kind] || "/home",
+      href: UPCOMING_HREF[item.kind] || "/today",
     }));
   }
 
   for (const item of data.activity || []) {
-    jobs.push(notify(userId, { key: `activity:${item.id}`, kind: "activity", title: item.title, body: item.body, href: "/cash-flow" }));
+    jobs.push(notify(userId, { key: `activity:${item.id}`, kind: "activity", title: item.title, body: item.body, href: "/money" }));
   }
 
   for (const sip of data.portfolio?.sips || []) {
@@ -67,7 +67,7 @@ export const syncNotifications = async (user, overview) => {
         kind: "price",
         title: `No SIP instalment found for ${sip.name}`,
         body: `The ${money(sip.amount)} instalment due on ${date} isn't in your records.`,
-        href: "/portfolio",
+        href: "/wealth/investments",
       }));
     }
   }
@@ -79,7 +79,7 @@ export const syncNotifications = async (user, overview) => {
       kind: "budget",
       title: budget.percentUsed >= 100 ? `${budget.category} budget is used up` : `${budget.category} budget is ${budget.percentUsed}% used`,
       body: `${money(budget.spentAmount)} of ${money(budget.budgetAmount)} this month.`,
-      href: "/cash-flow?tab=budgets",
+      href: "/money/budgets",
     }));
   }
 
@@ -90,7 +90,7 @@ export const syncNotifications = async (user, overview) => {
       kind: "goal",
       title: `${goal.name} is behind`,
       body: `About ${money(goal.extraMonthly)} more a month would get it back on track.`,
-      href: "/goals",
+      href: "/plan",
     }));
   }
 
@@ -184,7 +184,7 @@ export const sendWeeklyDigest = async (user) => {
     html: layout({
       heading: `Hi ${escapeHtml(user.firstName || "there")}, here's your week`,
       paragraphs,
-      button: { label: "Open Munim.AI", href: appUrl("/home") },
+      button: { label: "Open Munim.AI", href: appUrl("/today") },
       footer: `You get this because the weekly summary is on. Turn it off in <a href="${appUrl("/settings?section=preferences")}">Settings</a>.`,
     }),
   });

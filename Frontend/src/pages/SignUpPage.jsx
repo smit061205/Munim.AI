@@ -19,7 +19,7 @@ export default function SignUpPage() {
 
   // A new account has no investor profile, so this lands on the questionnaire
   if (isSignedIn) {
-    return <Navigate to="/home" replace />;
+    return <Navigate to="/today" replace />;
   }
 
   const handleChange = (e) => {

@@ -15,6 +15,7 @@ import {
   SectionTitle,
   Skeleton,
   Stat,
+  StatStrip,
   Toggle,
   useToast,
 } from "../components/ui";
@@ -139,7 +140,7 @@ export default function TaxPage() {
         <Button variant="secondary" onClick={() => setEditing(true)}>Edit income and deductions</Button>
       </PageHeader>
 
-      <div className="grid grid-cols-2 @3xl:grid-cols-4 gap-6 mb-8">
+      <StatStrip>
         <Stat label="Estimated tax" value={formatMoney(regimes[regimes.better].total)}>
           <span className="text-muted">Under the {regimes.better} regime</span>
         </Stat>
@@ -150,7 +151,7 @@ export default function TaxPage() {
         <Stat label="Capital gains tax" value={formatMoney(capitalGains.tax.total)}>
           <span className="text-muted">On sales so far this year</span>
         </Stat>
-      </div>
+      </StatStrip>
 
       <Card className="p-5 mb-6">
         <SectionTitle
@@ -244,7 +245,7 @@ export default function TaxPage() {
             </table>
           </div>
         ) : (
-          <p className="text-muted">No sales this year. Record sales on the <Link to="/portfolio" className="underline">Portfolio</Link> page or import a statement.</p>
+          <p className="text-muted">No sales this year. Record sales on the <Link to="/wealth/investments" className="underline">Investments</Link> page or import a statement.</p>
         )}
       </Card>
 

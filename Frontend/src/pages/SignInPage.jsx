@@ -22,7 +22,7 @@ export default function SignInPage() {
   }, []);
 
   if (isSignedIn) {
-    return <Navigate to="/home" replace />;
+    return <Navigate to="/today" replace />;
   }
 
   const handleChange = (e) => {

@@ -608,7 +608,7 @@ const buildInsights = ({
         severity: "warning",
         title: `${budget.category} is over budget`,
         body: `You've spent ${budget.percentUsed}% of this ${budget.period} budget.`,
-        href: "/cash-flow?tab=budgets",
+        href: "/money/budgets",
       });
     }
   }
@@ -624,7 +624,7 @@ const buildInsights = ({
       severity: "info",
       title: "Your portfolio has drifted from your target",
       body: `${furthest.label} is ${furthest.percent}% against a ${furthest.target}% target.`,
-      href: "/portfolio",
+      href: "/wealth/investments",
     });
   }
 
@@ -638,7 +638,7 @@ const buildInsights = ({
         severity: "warning",
         title: "Your emergency fund is thin",
         body: `It covers ${health.emergencyMonths} months of spending. Three to six is a common target.`,
-        href: "/accounts",
+        href: "/wealth/accounts",
       });
     }
 
@@ -651,7 +651,7 @@ const buildInsights = ({
         severity: "warning",
         title: "You're carrying high-interest debt",
         body: `Clearing debt at ${costly.interest_rate}% usually beats what investments can earn.`,
-        href: "/accounts",
+        href: "/wealth/accounts",
       });
     }
   }
@@ -668,7 +668,7 @@ const buildInsights = ({
       severity: "warning",
       title: `A SIP into ${sip.name} looks missed`,
       body: `No purchase was found around ${sip.missed.join(", ")}. Check your bank balance on the SIP date.`,
-      href: "/portfolio",
+      href: "/wealth/investments",
     });
   }
 

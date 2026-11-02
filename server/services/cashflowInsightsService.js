@@ -144,7 +144,7 @@ export const findUnusualActivity = (transactions, recurring, date = todayKey()) 
       kind: "price",
       title: `${item.name} now costs more`,
       body: `₹${item.priceIncrease.from.toLocaleString("en-IN")} went up to ₹${item.priceIncrease.to.toLocaleString("en-IN")} a ${item.cadence === "monthly" ? "month" : item.cadence.replace(/ly$/, "")}.`,
-      href: "/cash-flow?tab=recurring",
+      href: "/money/bills",
     });
   }
 
@@ -238,7 +238,7 @@ export const buildUpcoming = ({ bills, debts, funds, policies, recurring }, date
       name: bill.name,
       amount: bill.amount,
       date: nextMonthlyDate(bill.due_day, date, step, bill.due_month),
-      href: "/cash-flow?tab=upcoming",
+      href: "/money/bills",
     });
   }
 
@@ -249,7 +249,7 @@ export const buildUpcoming = ({ bills, debts, funds, policies, recurring }, date
       name: debt.type === "credit_card" ? "Credit card payment" : `${debt.type.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase())} EMI`,
       amount: debt.monthly_payment,
       date: nextMonthlyDate(debt.due_day, date),
-      href: "/accounts",
+      href: "/wealth/accounts",
     });
   }
 
@@ -260,7 +260,7 @@ export const buildUpcoming = ({ bills, debts, funds, policies, recurring }, date
       name: `SIP: ${fund.scheme_name}`,
       amount: fund.sip.amount,
       date: nextMonthlyDate(fund.sip.day, date),
-      href: "/portfolio",
+      href: "/wealth/investments",
     });
   }
 
@@ -279,7 +279,7 @@ export const buildUpcoming = ({ bills, debts, funds, policies, recurring }, date
       name: `${policy.name} premium`,
       amount: policy.premium,
       date: due,
-      href: "/accounts",
+      href: "/wealth/accounts",
     });
   }
 
@@ -296,7 +296,7 @@ export const buildUpcoming = ({ bills, debts, funds, policies, recurring }, date
       name: item.name,
       amount: item.amount,
       date: next,
-      href: "/cash-flow?tab=recurring",
+      href: "/money/bills",
       expected: true,
     });
   }
