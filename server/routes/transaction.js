@@ -5,7 +5,7 @@ import {
   updateTransaction,
   deleteTransaction,
 } from "../controllers/transactionController.js";
-import { requireAuth } from "../middleware/clerkAuth.js";
+import { requireAuth } from "../middleware/auth.js";
 
 const router = express.Router();
 

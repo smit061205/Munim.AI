@@ -1,289 +1,98 @@
-# Munim.AI - Personal Finance Assistant
+# Munim.AI
 
-A comprehensive personal finance management system with AI-powered insights, dashboard visualizations, and advanced analytics.
+An investing and personal finance app for people in India. Users answer an investor questionnaire, get a target mix of equity, debt and gold, and see their whole financial picture against it, with an AI assistant that answers from their own numbers.
 
 ## Features
 
-### AI-Powered Query System
+- **Home**: net worth history, financial health score, insights, portfolio mix, spending and cash flow
+- **Portfolio**: stocks, mutual funds and EPF, compared with the target allocation, with a rebalancing plan and CAMS or KFintech statement import
+- **Cash flow**: transactions, budgets, spreadsheet import and CSV export
+- **Accounts**: bank accounts, property, vehicles, debts and credit score
+- **Goals**: target amounts and dates, with the monthly saving each one needs
+- **Calculators**: SIP, retirement corpus, and prepay a loan or invest, started from your own numbers
+- **Reports**: monthly statements with a forecast, as CSV or printed to PDF
+- **Assistant**: streaming answers, saved conversations, spreadsheet attachments and per-user limits
+- **Settings**: profile, risk profile, what the assistant can see, data export, password and account deletion
 
-- Natural language financial queries
-- Permission-based data access
-- Intelligent response generation using Google Gemini AI
+New accounts start empty, and can load clearly labelled sample data.
 
-### Dashboard Visualizations
+## Stack
 
-- Monthly spending trends
-- Asset vs liability breakdown
-- EPF contribution timeline
-- Credit score history
-- Net worth progression
-- Spending category analysis
+- **Frontend**: React 19, Vite, Tailwind CSS 4, Recharts, React Router
+- **Backend**: Node.js, Express, MongoDB with Mongoose
+- **Auth**: email and password with JWT sessions
+- **AI**: OpenRouter, using a low-cost Gemini model by default
 
-### Advanced Analytics
+## Getting started
 
-- Expense trend forecasting (3-month projections)
-- Savings forecast with confidence intervals
-- Investment portfolio composition analysis
-- Financial health scoring
-- Cash flow analysis
-- Dynamic category filtering
-
-### Privacy & Security
-
-- Permission-based data filtering
-- Category-level access control
-- Secure authentication with Clerk
-- Request tracking and logging
-
-## API Endpoints
-
-### System Health
-
-- `GET /api/health` - System health check
-- `GET /api/status` - Detailed system status
-
-### Query System
-
-- `POST /api/query` - AI-powered financial queries
-
-### Dashboard Data
-
-- `GET /api/dashboard` - Complete dashboard data
-- `GET /api/dashboard/monthly-spending` - Monthly spending trends
-- `GET /api/dashboard/asset-liability` - Asset vs liability breakdown
-- `GET /api/dashboard/epf-contributions` - EPF contribution timeline
-- `GET /api/dashboard/credit-score` - Credit score history
-- `GET /api/dashboard/net-worth` - Net worth progression
-- `GET /api/dashboard/spending-categories` - Spending by category
-- `POST /api/dashboard/refresh` - Refresh with new permissions
-
-### Advanced Analytics
-
-- `GET /api/analytics/expense-trends` - Expense forecasting
-- `GET /api/analytics/savings-forecast` - Savings projections
-- `GET /api/analytics/investment-composition` - Portfolio analysis
-- `GET /api/analytics/financial-health` - Health scoring
-- `GET /api/analytics/cash-flow` - Cash flow analysis
-- `GET /api/analytics/summary` - Comprehensive analytics
-- `POST /api/analytics/category-filter` - Dynamic filtering
-
-## Installation & Setup
-
-1. **Clone the repository**
-
-   ```bash
-   git clone <repository-url>
-   cd Munim.AI
-   ```
-
-2. **Install dependencies**
-
-   ```bash
-   npm install
-   ```
-
-3. **Environment Configuration**
-   Create a `.env` file in the root directory:
-
-   ```env
-   MONGODB_URI=your_mongodb_connection_string
-   GEMINI_API_KEY=your_google_gemini_api_key
-   CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
-   CLERK_SECRET_KEY=your_clerk_secret_key
-   PORT=5000
-   NODE_ENV=development
-   ```
-
-4. **Start the server**
-
-   ```bash
-   # Development mode with auto-reload
-   npm run dev
-
-   # Production mode
-   npm start
-   ```
-
-## Testing
-
-### Automated Testing Suite
-
-The project includes comprehensive testing frameworks for backend validation:
-
-#### 1. Complete Endpoint Testing
+You need Node.js 20 or later, a MongoDB database and an [OpenRouter](https://openrouter.ai) API key.
 
 ```bash
-# Run all endpoint tests
-npm test
-
-# Or run directly
-npm run test:endpoints
+cd server
+npm install
+cp .env.example .env
 ```
 
-This tests:
-
-- System health and status endpoints
-- Query endpoint with various scenarios
-- All dashboard endpoints
-- All analytics endpoints
-- Permission-based access control
-- Error handling scenarios
-
-#### 2. Permission Validation Testing
+Fill in `MONGODB_URI`, `JWT_SECRET` and `OPENROUTER_API_KEY` in `server/.env`, then start the API:
 
 ```bash
-# Run permission-specific tests
-node server/scripts/validatePermissions.js
+npm run dev
 ```
 
-This validates:
+In a second terminal, start the frontend:
 
-- Category-based data filtering
-- Permission combinations (12 different scenarios)
-- Dynamic category filtering
-- Dashboard refresh with permissions
-- Unauthorized access prevention
-
-### Test Categories Covered
-
-- **No Permissions** - Empty category access
-- **Single Category** - Assets, Transactions, Liabilities, EPF, Credit Score, Investments
-- **Category Combinations** - Assets + Liabilities, Assets + Transactions, etc.
-- **Full Access** - All categories enabled
-
-### Manual Testing
-
-1. **Start the server**: `npm run dev`
-2. **Test endpoints** using tools like Postman or curl
-3. **Check logs** for detailed request/response information
-4. **Verify permissions** by toggling category access
-
-## Project Structure
-
-```
-Munim.AI/
-├── server/
-│   ├── controllers/          # Request handlers
-│   ├── data/                # Mock data files
-│   ├── middleware/          # Authentication & error handling
-│   ├── models/              # Database models
-│   ├── routes/              # API route definitions
-│   ├── scripts/             # Testing and utility scripts
-│   └── services/            # Business logic services
-├── package.json
-└── README.md
+```bash
+cd Frontend
+npm install
+npm run dev
 ```
 
-## Tech Stack
+The app runs at http://localhost:5173 and the API at http://localhost:5001. The app works without an OpenRouter key, but the assistant stays off.
 
-- **Frontend**
+### Upgrading an older database
 
-  - React (v19) — UI framework
-  - React Router (v6.26) — routing
-  - Vite (v7) — dev server and bundler
-  - Tailwind CSS (v4.1) — styling
-  - Framer Motion (v12.23) — animations
-  - Chart.js (v4.4) + react-chartjs-2 (v5.2) + chartjs-adapter-date-fns (v3.0) — charts
-  - Axios (v1.6) — HTTP client
-  - Clerk React (v5) — authentication
-  - date-fns (v2.30) — date utilities
+Back up the database, then run this once before deploying:
 
-- **Backend**
-
-  - Node.js + Express (v4.18)
-  - Mongoose (v7) — MongoDB ODM
-  - CORS (v2.8), dotenv (v16), JSON Web Token (v9)
-  - Nodemon (v3.1) — dev reload
-  - Svix (v1.76) — webhooks
-
-- **AI**
-
-  - @google/generative-ai (v0.24)
-  - Default model: gemini-1.5-flash; Fallback: gemini-1.5-pro
-
-- **Data & Storage**
-
-  - MongoDB (Atlas/local)
-  - XLSX parsing for Excel ingestion
-
-- **Auth**
-  - Clerk (frontend + server SDK)
-
-### Architecture at a glance
-
-```
-[React + Vite + Tailwind]  →  [Clerk Auth]  →  [Express API]
-       |                          |               |
-       |                       Permissions         →  [MongoDB]
-       |                          |
-       →  File Uploads (Excel)  →  XLSX → JSON →  [Gemini Service]
+```bash
+cd server && npm run migrate:remove-clerk
 ```
 
-- The AI chat composes a prompt from: user question + permission-filtered financial data + optional Excel JSON context.
-- Excel files are converted server-side to JSON and merged into the prompt text for reliable reasoning.
+It moves data off Clerk IDs, and repairs older imported transactions. Clerk passwords can't be migrated, so those accounts need a new password before they can sign in.
 
-## Key Services
+## Assistant
 
-### DashboardAnalytics Service
+All settings live in `server/.env`:
 
-Handles aggregation and processing of financial data for dashboard visualizations including monthly spending, asset/liability breakdown, and net worth calculations.
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `OPENROUTER_MODEL` | `google/gemini-2.5-flash-lite` | Model used for every user |
+| `OPENROUTER_FALLBACK_MODEL` | `google/gemini-3.1-flash-lite` | Used if the main model fails before replying |
+| `AI_DAILY_MESSAGE_LIMIT` | `20` | Messages per user per day, reset at midnight IST |
+| `AI_PER_MINUTE_LIMIT` | `5` | Burst limit per user |
+| `AI_MONTHLY_TOKEN_LIMIT` | `1000000` | Tokens per user per month |
+| `AI_CONTEXT_TOKEN_LIMIT` | `16000` | Largest prompt sent for one reply |
+| `AI_MAX_OUTPUT_TOKENS` | `1024` | Longest reply |
+| `AI_MAX_MESSAGE_CHARS` | `4000` | Longest user message |
 
-### AdvancedAnalytics Service
+Each prompt holds a snapshot of the user's finances, the rolling summary and as many recent messages as fit. Older messages are summarised rather than dropped. Categories a user turns off in Settings are removed on the server before the prompt is built. A message that fails before any reply arrives isn't counted.
 
-Provides sophisticated financial analysis including expense forecasting, savings projections, investment composition analysis, and financial health scoring.
+## API
 
-### GeminiService
+Everything except sign-up and sign-in needs an `Authorization: Bearer <token>` header.
 
-Integrates with Google Gemini AI for natural language query processing with comprehensive error handling and logging.
+| Route | Purpose |
+| --- | --- |
+| `/api/auth` | Register, sign in, profile, password, account deletion |
+| `/api/investor-profile` | Questionnaire and risk profile |
+| `/api/wealth` | Overview, reports, assets, debts, EPF, credit score, goals, sample data, export |
+| `/api/transactions` | Transactions |
+| `/api/budgets` | Budgets |
+| `/api/accounts` | Bank accounts |
+| `/api/investments` | Stocks, mutual funds and statement import |
+| `/api/ingest/excel` | Spreadsheet import |
+| `/api/permissions` | What the assistant can see |
+| `/api/assistant` | Conversations, messages and usage |
 
-### DataService
+## Disclaimer
 
-Manages data loading and filtering based on user permissions and category access controls.
-
-## Error Handling
-
-- **Comprehensive logging** with request IDs for traceability
-- **User-friendly error messages** for different error types
-- **Categorized error responses** (validation, authentication, permission, etc.)
-- **Rate limiting** and health check endpoints
-- **Detailed stack traces** in development mode
-
-## Demo Readiness Features
-
-✅ **Comprehensive error handling and logging**  
-✅ **Permission-based data filtering**  
-✅ **Automated testing framework**  
-✅ **Health check and monitoring endpoints**  
-✅ **User-friendly error responses**  
-✅ **Request tracking and debugging**  
-✅ **Chart.js-ready data structures**  
-✅ **Dynamic category filtering**
-
-## Development
-
-### Adding New Endpoints
-
-1. Create route handler in appropriate `/routes` file
-2. Add business logic to relevant service in `/services`
-3. Update error handling and validation
-4. Add tests to testing scripts
-5. Update API documentation
-
-### Testing New Features
-
-1. Add endpoint tests to `testEndpoints.js`
-2. Add permission tests to `validatePermissions.js`
-3. Run test suite: `npm test`
-4. Verify logs and error handling
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Add comprehensive tests
-4. Ensure all tests pass
-5. Submit a pull request
-
-## License
-
-[Add your license information here]
+Munim.AI is an educational tool. It is not a SEBI-registered adviser and does not give personal investment advice.

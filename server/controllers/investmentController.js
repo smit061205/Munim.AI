@@ -1,12 +1,17 @@
 import { Investment } from "../models/Financial.js";
+import { ApiError } from "../middleware/errorHandler.js";
 import { v4 as uuidv4 } from "uuid";
+import {
+  mergeFunds,
+  readStatement,
+} from "../services/statementImportService.js";
 
 // Get all investments for a user
 export const getInvestments = async (req, res) => {
   try {
-    const clerkId = req.auth.userId;
+    const userId = req.auth.userId;
 
-    let investmentDoc = await Investment.findOne({ clerkId });
+    let investmentDoc = await Investment.findOne({ user_id: userId });
 
     if (!investmentDoc) {
       return res.json({
@@ -34,7 +39,7 @@ export const getInvestments = async (req, res) => {
 // Create a new investment (stock or mutual fund)
 export const createInvestment = async (req, res) => {
   try {
-    const clerkId = req.auth.userId;
+    const userId = req.auth.userId;
     const { type, ...investmentData } = req.body;
 
     // Validate investment type
@@ -75,8 +80,15 @@ export const createInvestment = async (req, res) => {
         created_at: new Date(),
       };
     } else {
-      const { scheme_name, scheme_code, units, current_value, nav, category } =
-        investmentData;
+      const {
+        scheme_name,
+        scheme_code,
+        units,
+        current_value,
+        nav,
+        category,
+        invested_amount,
+      } = investmentData;
 
       if (!scheme_name || !units || !current_value) {
         return res.status(400).json({
@@ -93,17 +105,17 @@ export const createInvestment = async (req, res) => {
         current_value: parseFloat(current_value),
         nav: parseFloat(nav) || 0,
         category: category || "",
+        invested_amount: parseFloat(invested_amount) || 0,
         created_at: new Date(),
       };
     }
 
     // Find or create investment document
-    let investmentDoc = await Investment.findOne({ clerkId });
+    let investmentDoc = await Investment.findOne({ user_id: userId });
 
     if (!investmentDoc) {
       investmentDoc = new Investment({
-        user_id: clerkId,
-        clerkId,
+        user_id: userId,
         portfolio: {
           total_value: newInvestment.current_value,
           stocks: type === "stock" ? [newInvestment] : [],
@@ -151,11 +163,11 @@ export const createInvestment = async (req, res) => {
 // Update an investment
 export const updateInvestment = async (req, res) => {
   try {
-    const clerkId = req.auth.userId;
+    const userId = req.auth.userId;
     const { investmentId, type } = req.params;
     const updateData = req.body;
 
-    const investmentDoc = await Investment.findOne({ clerkId });
+    const investmentDoc = await Investment.findOne({ user_id: userId });
 
     if (!investmentDoc || !investmentDoc.portfolio) {
       return res.status(404).json({
@@ -211,10 +223,10 @@ export const updateInvestment = async (req, res) => {
 // Delete an investment
 export const deleteInvestment = async (req, res) => {
   try {
-    const clerkId = req.auth.userId;
+    const userId = req.auth.userId;
     const { investmentId, type } = req.params;
 
-    const investmentDoc = await Investment.findOne({ clerkId });
+    const investmentDoc = await Investment.findOne({ user_id: userId });
 
     if (!investmentDoc || !investmentDoc.portfolio) {
       return res.status(404).json({
@@ -259,5 +271,39 @@ export const deleteInvestment = async (req, res) => {
       success: false,
       message: "Failed to delete investment",
     });
+  }
+};
+
+// Read a mutual fund statement and return its holdings for the user to check.
+// Nothing is saved until they confirm.
+export const previewStatement = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      throw new ApiError(400, "Choose your statement as a PDF file");
+    }
+    const funds = await readStatement(req.file.buffer, req.body.password || "");
+    res.json({ success: true, data: funds });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Save the holdings the user confirmed
+export const importStatement = async (req, res, next) => {
+  try {
+    const userId = req.auth.userId;
+    const investmentDoc =
+      (await Investment.findOne({ user_id: userId })) ||
+      new Investment({ user_id: userId });
+
+    if (!investmentDoc.portfolio) {
+      investmentDoc.portfolio = { stocks: [], mutual_funds: [] };
+    }
+
+    const result = mergeFunds(investmentDoc.portfolio, req.body.funds);
+    await investmentDoc.save();
+    res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
   }
 };

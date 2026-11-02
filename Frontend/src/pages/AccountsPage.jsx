@@ -1,682 +1,335 @@
-import React, { useState, useEffect } from "react";
-import { useUser, useAuth } from "@clerk/clerk-react";
-import { usePermissions } from "../context/PermissionsContext";
-import { useAIChat } from "../context/AIChatContext";
-import { motion, AnimatePresence } from "framer-motion";
-import { createAuthenticatedApi } from "../services/api";
-import Navbar from "../components/Navbar";
-import Sidebar from "../components/Sidebar";
-import AIChatSidebar from "../components/AIChatSidebar";
-import Modal from "../components/Modal";
+import React, { useState } from "react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
+import { useData } from "../context/DataContext";
+import { api } from "../lib/api";
+import { formatMoney, humanize } from "../lib/format";
+import Loaded from "../components/Loaded";
+import {
+  Button,
+  Card,
+  ConfirmModal,
+  Field,
+  FormModal,
+  IconButton,
+  Input,
+  PageHeader,
+  Select,
+  Stat,
+  useToast,
+} from "../components/ui";
 
-const AccountsPage = () => {
-  const { user } = useUser();
-  const { getToken, isLoaded, isSignedIn } = useAuth();
-  const { permissions } = usePermissions();
-  const permissionsStr = JSON.stringify(permissions);
-  const {
-    isAIChatOpen,
-    isAIChatCollapsed,
-    toggleAIChat,
-    toggleAIChatCollapse,
-  } = useAIChat();
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [accounts, setAccounts] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newAccount, setNewAccount] = useState({
-    type: "",
-    bank_name: "",
-    balance: "",
-    account_number: "",
-  });
-  const [createError, setCreateError] = useState("");
-  const [createLoading, setCreateLoading] = useState(false);
-  const [selectedAccount, setSelectedAccount] = useState(null);
+// Each kind of record differs only in its fields and where it is saved
+const KINDS = {
+  account: {
+    noun: "bank account",
+    path: "/accounts",
+    fields: [
+      { key: "bank_name", label: "Bank", required: true },
+      { key: "type", label: "Account type", options: ["savings", "current", "checking", "investment"] },
+      { key: "account_number", label: "Last four digits" },
+      { key: "balance", label: "Balance", number: true, required: true },
+    ],
+  },
+  property: {
+    noun: "property",
+    path: "/wealth/assets/real_estate",
+    fields: [
+      { key: "address", label: "Name or address", required: true },
+      { key: "type", label: "Type", options: ["residential", "commercial", "land"] },
+      { key: "current_value", label: "Current value", number: true, required: true },
+    ],
+  },
+  vehicle: {
+    noun: "vehicle",
+    path: "/wealth/assets/vehicles",
+    fields: [
+      { key: "type", label: "Type", options: ["car", "bike", "truck", "other"] },
+      { key: "make", label: "Make", required: true },
+      { key: "model", label: "Model" },
+      { key: "year", label: "Year", number: true },
+      { key: "current_value", label: "Current value", number: true, required: true },
+    ],
+  },
+  debt: {
+    noun: "debt",
+    path: "/wealth/liabilities",
+    fields: [
+      {
+        key: "type",
+        label: "Type",
+        options: ["home_loan", "car_loan", "personal_loan", "education_loan", "business_loan", "credit_card"],
+      },
+      { key: "remaining_balance", label: "Amount owed", number: true, required: true },
+      { key: "monthly_payment", label: "Monthly payment", number: true },
+      { key: "interest_rate", label: "Interest rate (%)", number: true },
+    ],
+  },
+};
 
-  useEffect(() => {
-    const fetchAccounts = async () => {
-      if (!isLoaded || !isSignedIn || !permissions.assets) return;
-
-      setLoading(true);
-      try {
-        const token = await getToken();
-        const authApi = createAuthenticatedApi(() => Promise.resolve(token));
-        const response = await authApi.get("/data/assets");
-
-        console.log("🏦 Assets API Response:", response.data);
-        console.log("📊 Raw assets data:", response.data.data);
-
-        if (response.data) {
-          // Process assets data into accounts format
-          const processedAccounts = [];
-
-          // Handle the data as a single document or array of documents
-          const assetsData = Array.isArray(response.data.data)
-            ? response.data.data
-            : [response.data.data];
-
-          assetsData.forEach((doc, docIndex) => {
-            console.log(`🏦 Processing assets doc ${docIndex}:`, doc);
-            // Process bank accounts
-            if (doc.bank_accounts) {
-              console.log(`💳 Found ${doc.bank_accounts.length} bank accounts`);
-              doc.bank_accounts.forEach((account, index) => {
-                processedAccounts.push({
-                  id: `bank_${docIndex}_${index}`,
-                  name: account.bank_name || "Bank Account",
-                  type: account.type || "checking",
-                  balance: account.balance || 0,
-                  accountNumber: `****${String(
-                    account.account_number || "0000",
-                  ).slice(-4)}`,
-                  bank: account.bank_name || "Unknown Bank",
-                  status: "active",
-                  lastTransaction: new Date().toISOString().split("T")[0],
-                });
-              });
-            }
-
-            // Process real estate as investment accounts
-            if (doc.real_estate) {
-              doc.real_estate.forEach((property, index) => {
-                processedAccounts.push({
-                  id: `property_${docIndex}_${index}`,
-                  name: `${property.type} Property`,
-                  type: "investment",
-                  balance: property.current_value || 0,
-                  accountNumber: `****PROP`,
-                  bank: "Real Estate",
-                  status: "active",
-                  lastTransaction: new Date().toISOString().split("T")[0],
-                });
-              });
-            }
-
-            // Process vehicles as assets
-            if (doc.vehicles) {
-              doc.vehicles.forEach((vehicle, index) => {
-                processedAccounts.push({
-                  id: `vehicle_${docIndex}_${index}`,
-                  name: `${vehicle.type} Vehicle`,
-                  type: "investment",
-                  balance: vehicle.current_value || 0,
-                  accountNumber: `****AUTO`,
-                  bank: "Vehicle Asset",
-                  status: "active",
-                  lastTransaction: new Date().toISOString().split("T")[0],
-                });
-              });
-            }
-          });
-
-          console.log("🏦 Processed accounts data:", processedAccounts);
-          setAccounts(processedAccounts);
-        } else {
-          console.log("⚠️ No assets data found in response");
-        }
-      } catch (error) {
-        console.error("❌ Error fetching accounts:", error);
-        console.error(
-          "❌ Error details:",
-          error.response?.data || error.message,
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchAccounts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [permissionsStr, isLoaded, isSignedIn]);
-
-  const totalBalance = accounts.reduce(
-    (sum, account) => sum + account.balance,
-    0,
+const RecordModal = ({ kind, record, onClose }) => {
+  const { refresh } = useData();
+  const toast = useToast();
+  const { noun, path, fields } = KINDS[kind];
+  const [form, setForm] = useState(
+    Object.fromEntries(
+      fields.map((field) => [
+        field.key,
+        record?.[field.key] ?? field.options?.[0] ?? "",
+      ]),
+    ),
   );
-  const activeAccounts = accounts.filter(
-    (account) => account.status === "active",
-  ).length;
-  const creditBalance = accounts
-    .filter((account) => account.type === "credit")
-    .reduce((sum, account) => sum + Math.abs(account.balance), 0);
 
-  const getAccountTypeIcon = (type) => {
-    switch (type) {
-      case "checking":
-        return (
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3zm10-10V7a4 4 0 00-8 0v4h8z"
-            />
-          </svg>
-        );
-      case "savings":
-        return (
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-            />
-          </svg>
-        );
-      case "credit":
-        return (
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
-            />
-          </svg>
-        );
-      case "investment":
-        return (
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
-            />
-          </svg>
-        );
-      case "fd":
-        return (
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-            />
-          </svg>
-        );
-      default:
-        return (
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-        );
-    }
-  };
-
-  const getAccountTypeColor = (type) => {
-    switch (type) {
-      case "checking":
-        return "text-blue-400";
-      case "savings":
-        return "text-emerald-400";
-      case "credit":
-        return "text-red-400";
-      case "investment":
-        return "text-purple-400";
-      case "fd":
-        return "text-yellow-400";
-      default:
-        return "text-gray-400";
-    }
-  };
-
-  const handleCreateAccount = async (e) => {
-    e.preventDefault();
-    setCreateError("");
-    setCreateLoading(true);
-
-    try {
-      const token = await getToken();
-      const authApi = createAuthenticatedApi(() => Promise.resolve(token));
-      const response = await authApi.post("/data/assets", newAccount);
-
-      console.log("🏦 Create account API Response:", response.data);
-      setAccounts((prevAccounts) => [...prevAccounts, response.data]);
-      setShowCreateModal(false);
-      setNewAccount({
-        type: "",
-        bank_name: "",
-        balance: "",
-        account_number: "",
-      });
-    } catch (error) {
-      console.error("❌ Error creating account:", error);
-      console.error("❌ Error details:", error.response?.data || error.message);
-      setCreateError("Failed to create account. Please try again.");
-    } finally {
-      setCreateLoading(false);
-    }
-  };
+  const label = noun.replace(/^./, (letter) => letter.toUpperCase());
 
   return (
-    <div className="flex h-screen bg-black relative">
-      <Sidebar
-        isCollapsed={isSidebarCollapsed}
-        setIsCollapsed={setIsSidebarCollapsed}
-        onAIToggle={toggleAIChat}
-        isAIChatOpen={isAIChatOpen}
-        isMobileOpen={isMobileSidebarOpen}
-        setIsMobileOpen={setIsMobileSidebarOpen}
-      />
-
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Navbar
-          title="Accounts"
-          subtitle="Manage and monitor all your financial accounts."
-          onMenuClick={() => setIsMobileSidebarOpen(true)}
-        />
-
-        {/* Content */}
-        <div className="flex-1 overflow-auto p-4 md:p-8">
-          {/* Summary Cards */}
-          <div className="mb-8">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
-              <div className="bg-gray-950 p-6 border border-gray-800 shadow-xl">
-                <h3 className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
-                  Total Balance
-                </h3>
-                <p className="text-3xl font-semibold text-white mb-2">
-                  ₹{totalBalance.toLocaleString()}
-                </p>
-                <p className="text-emerald-400 text-sm">Across all accounts</p>
-              </div>
-              <div className="bg-gray-950 p-6 border border-gray-800 shadow-xl">
-                <h3 className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
-                  Active Accounts
-                </h3>
-                <p className="text-3xl font-semibold text-white mb-2">
-                  {activeAccounts}
-                </p>
-                <p className="text-gray-400 text-sm">Connected accounts</p>
-              </div>
-              <div className="bg-gray-950 p-6 border border-gray-800 shadow-xl">
-                <h3 className="text-gray-300 text-sm font-medium mb-2 uppercase tracking-wide">
-                  Credit Used
-                </h3>
-                <p className="text-3xl font-semibold text-red-400 mb-2">
-                  ₹{creditBalance.toLocaleString()}
-                </p>
-                <p className="text-gray-400 text-sm">Outstanding balance</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Accounts Grid */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-medium text-white">Your Accounts</h2>
-              {/* <button
-                onClick={() => setShowCreateModal(true)}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 font-medium transition-colors"
-              >
-                Add Account
-              </button> */}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-              {accounts.map((account) => (
-                <div
-                  key={account.id}
-                  className="bg-gray-950 p-6 border border-gray-800 shadow-xl hover:shadow-2xl transition-all duration-300"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-3">
-                      <span className="text-2xl">
-                        {getAccountTypeIcon(account.type)}
-                      </span>
-                      <div>
-                        <h3 className="text-white font-medium">
-                          {account.name}
-                        </h3>
-                        <p className="text-gray-400 text-sm">{account.bank}</p>
-                      </div>
-                    </div>
-                    <span
-                      className={`px-2 py-1 text-xs font-medium uppercase tracking-wide ${
-                        account.status === "active"
-                          ? "bg-emerald-900/50 text-emerald-300 border border-emerald-800"
-                          : "bg-gray-800 text-gray-400 border border-gray-700"
-                      }`}
-                    >
-                      {account.status}
-                    </span>
-                  </div>
-
-                  <div className="mb-4">
-                    <p className="text-gray-400 text-sm mb-1">Account Number</p>
-                    <p className="text-white font-mono">
-                      {account.accountNumber}
-                    </p>
-                  </div>
-
-                  <div className="mb-4">
-                    <p className="text-gray-400 text-sm mb-1">Balance</p>
-                    <p
-                      className={`text-2xl font-semibold ${
-                        account.balance >= 0
-                          ? "text-emerald-400"
-                          : "text-red-400"
-                      }`}
-                    >
-                      {account.balance >= 0 ? "" : "-"}₹
-                      {Math.abs(account.balance).toLocaleString()}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-gray-400 text-xs">Last Transaction</p>
-                      <p className="text-gray-300 text-sm">
-                        {new Date(account.lastTransaction).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setSelectedAccount(account)}
-                      className="text-emerald-400 hover:text-emerald-300 text-sm font-medium"
-                    >
-                      View Details
-                    </button>
-                  </div>
-                </div>
+    <FormModal
+      title={`${record ? "Edit" : "Add"} ${noun}`}
+      submitLabel={record ? "Save changes" : `Add ${noun}`}
+      onClose={onClose}
+      onSubmit={async () => {
+        const body = Object.fromEntries(
+          fields.map((field) => [
+            field.key,
+            field.number ? Number(form[field.key]) || 0 : form[field.key],
+          ]),
+        );
+        await api(record ? `${path}/${record.id}` : path, {
+          method: record ? "PUT" : "POST",
+          body,
+        });
+        await refresh();
+        toast.success(`${label} ${record ? "updated" : "added"}`);
+      }}
+    >
+      {fields.map((field) => (
+        <Field key={field.key} label={field.label}>
+          {field.options ? (
+            <Select
+              value={form[field.key]}
+              onChange={(event) => setForm({ ...form, [field.key]: event.target.value })}
+            >
+              {field.options.map((option) => (
+                <option key={option} value={option}>
+                  {humanize(option)}
+                </option>
               ))}
-            </div>
-          </div>
-
-          {/* Account Types Overview */}
-          <div className="bg-gray-950 border border-gray-800 shadow-xl">
-            <div className="px-6 py-4 border-b border-gray-800">
-              <h3 className="text-lg font-medium text-white">
-                Account Types Overview
-              </h3>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                {["checking", "savings", "credit", "investment", "fd"].map(
-                  (type) => {
-                    const typeAccounts = accounts.filter(
-                      (account) => account.type === type,
-                    );
-                    const typeBalance = typeAccounts.reduce(
-                      (sum, account) => sum + account.balance,
-                      0,
-                    );
-
-                    return (
-                      <div key={type} className="text-center">
-                        <div className="text-3xl mb-2">
-                          {getAccountTypeIcon(type)}
-                        </div>
-                        <h4 className="text-white font-medium capitalize mb-1">
-                          {type}
-                        </h4>
-                        <p className="text-gray-400 text-sm mb-2">
-                          {typeAccounts.length} accounts
-                        </p>
-                        <p
-                          className={`font-semibold ${getAccountTypeColor(
-                            type,
-                          )}`}
-                        >
-                          ₹{Math.abs(typeBalance).toLocaleString()}
-                        </p>
-                      </div>
-                    );
-                  },
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="fixed top-0 right-0 h-full z-50">
-        <AnimatePresence>
-          {isAIChatOpen && (
-            <AIChatSidebar
-              isOpen={isAIChatOpen}
-              isCollapsed={isAIChatCollapsed}
-              onClose={toggleAIChat}
-              onToggleCollapse={toggleAIChatCollapse}
+            </Select>
+          ) : (
+            <Input
+              required={field.required}
+              type={field.number ? "number" : "text"}
+              min={field.number ? "0" : undefined}
+              step={field.number ? "any" : undefined}
+              value={form[field.key]}
+              onChange={(event) => setForm({ ...form, [field.key]: event.target.value })}
             />
           )}
-        </AnimatePresence>
-      </div>
-
-      {showCreateModal && (
-        <Modal
-          title="Create New Account"
-          onClose={() => setShowCreateModal(false)}
-        >
-          <form onSubmit={handleCreateAccount}>
-            {createError && (
-              <div className="mb-4 p-3 bg-red-900/20 border border-red-800 text-red-300 rounded">
-                {createError}
-              </div>
-            )}
-
-            <div className="mb-4">
-              <label
-                htmlFor="type"
-                className="block text-sm font-medium text-gray-300 mb-2"
-              >
-                Account Type *
-              </label>
-              <select
-                id="type"
-                required
-                value={newAccount.type}
-                onChange={(e) =>
-                  setNewAccount((prev) => ({ ...prev, type: e.target.value }))
-                }
-                className="block w-full px-3 py-2 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
-              >
-                <option value="savings">Savings</option>
-                <option value="current">Current</option>
-                <option value="checking">Checking</option>
-                <option value="investment">Investment</option>
-              </select>
-            </div>
-
-            <div className="mb-4">
-              <label
-                htmlFor="bank_name"
-                className="block text-sm font-medium text-gray-300 mb-2"
-              >
-                Bank Name *
-              </label>
-              <input
-                type="text"
-                id="bank_name"
-                required
-                placeholder="e.g., State Bank of India, HDFC Bank"
-                value={newAccount.bank_name}
-                onChange={(e) =>
-                  setNewAccount((prev) => ({
-                    ...prev,
-                    bank_name: e.target.value,
-                  }))
-                }
-                className="block w-full px-3 py-2 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg focus:ring-emerald-500 focus:border-emerald-500 placeholder-gray-400"
-              />
-            </div>
-
-            <div className="mb-4">
-              <label
-                htmlFor="balance"
-                className="block text-sm font-medium text-gray-300 mb-2"
-              >
-                Initial Balance (₹)
-              </label>
-              <input
-                type="number"
-                id="balance"
-                min="0"
-                step="0.01"
-                placeholder="10000"
-                value={newAccount.balance}
-                onChange={(e) =>
-                  setNewAccount((prev) => ({
-                    ...prev,
-                    balance: e.target.value,
-                  }))
-                }
-                className="block w-full px-3 py-2 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg focus:ring-emerald-500 focus:border-emerald-500 placeholder-gray-400"
-              />
-            </div>
-
-            <div className="mb-6">
-              <label
-                htmlFor="account_number"
-                className="block text-sm font-medium text-gray-300 mb-2"
-              >
-                Account Number (Optional)
-              </label>
-              <input
-                type="text"
-                id="account_number"
-                placeholder="****1234"
-                value={newAccount.account_number}
-                onChange={(e) =>
-                  setNewAccount((prev) => ({
-                    ...prev,
-                    account_number: e.target.value,
-                  }))
-                }
-                className="block w-full px-3 py-2 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg focus:ring-emerald-500 focus:border-emerald-500 placeholder-gray-400"
-              />
-            </div>
-
-            <div className="flex justify-end space-x-3">
-              <button
-                type="button"
-                onClick={() => setShowCreateModal(false)}
-                className="px-4 py-2 text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={createLoading}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
-              >
-                {createLoading ? "Creating..." : "Create Account"}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {selectedAccount && (
-        <Modal title="Account Details" onClose={() => setSelectedAccount(null)}>
-          <div className="space-y-4 text-white">
-            <div className="flex items-center justify-between pb-4 border-b border-gray-800">
-              <span className="text-gray-400">Account Name</span>
-              <span className="font-medium text-right">
-                {selectedAccount.name}
-              </span>
-            </div>
-            <div className="flex items-center justify-between pb-4 border-b border-gray-800">
-              <span className="text-gray-400">Institution</span>
-              <span className="font-medium text-right">
-                {selectedAccount.bank}
-              </span>
-            </div>
-            <div className="flex items-center justify-between pb-4 border-b border-gray-800">
-              <span className="text-gray-400">Type</span>
-              <span className="font-medium capitalize text-right">
-                {selectedAccount.type}
-              </span>
-            </div>
-            <div className="flex items-center justify-between pb-4 border-b border-gray-800">
-              <span className="text-gray-400">Account Number</span>
-              <span className="font-mono text-right">
-                {selectedAccount.accountNumber}
-              </span>
-            </div>
-            <div className="flex items-center justify-between pb-4 border-b border-gray-800">
-              <span className="text-gray-400">Status</span>
-              <span
-                className={`px-2 py-1 text-xs font-medium uppercase tracking-wide rounded ${
-                  selectedAccount.status === "active"
-                    ? "bg-emerald-900/50 text-emerald-300 border border-emerald-800"
-                    : "bg-gray-800 text-gray-400 border border-gray-700"
-                }`}
-              >
-                {selectedAccount.status}
-              </span>
-            </div>
-            <div className="flex items-center justify-between pb-4 border-b border-gray-800">
-              <span className="text-gray-400">Last Synced</span>
-              <span className="font-medium text-right">
-                {new Date(selectedAccount.lastTransaction).toLocaleDateString()}
-              </span>
-            </div>
-            <div className="flex items-center justify-between pt-2">
-              <span className="text-gray-400 text-lg">Current Balance</span>
-              <span
-                className={`text-2xl font-bold ${
-                  selectedAccount.balance >= 0
-                    ? "text-emerald-400"
-                    : "text-red-400"
-                }`}
-              >
-                {selectedAccount.balance >= 0 ? "" : "-"}₹
-                {Math.abs(selectedAccount.balance).toLocaleString()}
-              </span>
-            </div>
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={() => setSelectedAccount(null)}
-                className="px-6 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors font-medium"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-    </div>
+        </Field>
+      ))}
+    </FormModal>
   );
 };
 
-export default AccountsPage;
+const RecordList = ({ title, kind, rows, describe, onEdit, onRemove }) => (
+  <Card>
+    <div className="flex items-center justify-between gap-4 px-5 py-4">
+      <h2 className="font-semibold">{title}</h2>
+      <Button size="sm" variant="secondary" onClick={() => onEdit(kind, null)}>
+        <Plus size={14} /> Add
+      </Button>
+    </div>
+    {rows.length === 0 ? (
+      <p className="px-5 pb-5 text-muted">Nothing here yet.</p>
+    ) : (
+      <ul className="border-t border-line divide-y divide-line">
+        {rows.map((row) => {
+          const { name, detail, value } = describe(row);
+          return (
+            <li key={row.id || row._id} className="flex items-center gap-3 px-5 py-3">
+              <div className="min-w-0 flex-1">
+                <p className="font-medium truncate">{name}</p>
+                <p className="text-sm text-muted truncate">{detail}</p>
+              </div>
+              <p className="tnum shrink-0">{formatMoney(value)}</p>
+              <div className="flex gap-0.5 shrink-0">
+                <IconButton label={`Edit ${name}`} onClick={() => onEdit(kind, row)}>
+                  <Pencil size={15} />
+                </IconButton>
+                <IconButton label={`Remove ${name}`} onClick={() => onRemove(kind, row, name)}>
+                  <Trash2 size={15} />
+                </IconButton>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    )}
+  </Card>
+);
+
+const CreditModal = ({ credit, onClose }) => {
+  const { refresh } = useData();
+  const toast = useToast();
+  const [score, setScore] = useState(credit?.credit_score || "");
+  const [utilization, setUtilization] = useState(credit?.credit_utilization ?? "");
+
+  return (
+    <FormModal
+      title="Credit score"
+      description="Enter the score from your latest CIBIL or bureau report."
+      submitLabel="Save score"
+      onClose={onClose}
+      onSubmit={async () => {
+        await api("/wealth/credit-score", {
+          method: "PUT",
+          body: { credit_score: Number(score), credit_utilization: Number(utilization) },
+        });
+        await refresh();
+        toast.success("Credit score saved");
+      }}
+    >
+      <Field label="Score" hint="Between 300 and 900">
+        <Input required type="number" min="300" max="900" value={score} onChange={(event) => setScore(event.target.value)} />
+      </Field>
+      <Field label="Credit used (%)">
+        <Input type="number" min="0" max="100" value={utilization} onChange={(event) => setUtilization(event.target.value)} />
+      </Field>
+    </FormModal>
+  );
+};
+
+const creditBand = (score) =>
+  score >= 750 ? "Excellent" : score >= 700 ? "Good" : score >= 650 ? "Fair" : "Needs work";
+
+export default function AccountsPage() {
+  const { refresh } = useData();
+  const toast = useToast();
+  const [editing, setEditing] = useState(null);
+  const [removing, setRemoving] = useState(null);
+  const [editingCredit, setEditingCredit] = useState(false);
+
+  const onEdit = (kind, record) => setEditing({ kind, record });
+  const onRemove = (kind, record, name) => setRemoving({ kind, record, name });
+
+  return (
+    <Loaded>
+      {({ assets, liabilities, credit, netWorth }) => (
+        <>
+          <PageHeader
+            title="Accounts"
+            description="Everything you own and owe, outside your portfolio."
+          />
+
+          <div className="grid grid-cols-2 @3xl:grid-cols-4 gap-6 mb-8">
+            <Stat label="Cash" value={formatMoney(assets.cash)} />
+            <Stat label="Total assets" value={formatMoney(netWorth.grossAssets)} />
+            <Stat label="Total debt" value={formatMoney(liabilities.total)} />
+            <Stat label="Monthly EMIs" value={formatMoney(liabilities.monthlyPayment)} />
+          </div>
+
+          <div className="grid @3xl:grid-cols-2 gap-6">
+            <RecordList
+              title="Bank accounts"
+              kind="account"
+              rows={assets.accounts}
+              onEdit={onEdit}
+              onRemove={onRemove}
+              describe={(row) => ({
+                name: row.bank_name,
+                detail: humanize(row.type),
+                value: row.balance,
+              })}
+            />
+            <RecordList
+              title="Debts"
+              kind="debt"
+              rows={liabilities.items}
+              onEdit={onEdit}
+              onRemove={onRemove}
+              describe={(row) => ({
+                name: humanize(row.type),
+                detail: `${row.interest_rate ?? 0}% interest, ${formatMoney(row.monthly_payment)} a month`,
+                value: row.remaining_balance,
+              })}
+            />
+            <RecordList
+              title="Property"
+              kind="property"
+              rows={assets.realEstate}
+              onEdit={onEdit}
+              onRemove={onRemove}
+              describe={(row) => ({
+                name: row.address || humanize(row.type),
+                detail: humanize(row.type),
+                value: row.current_value,
+              })}
+            />
+            <RecordList
+              title="Vehicles"
+              kind="vehicle"
+              rows={assets.vehicleItems}
+              onEdit={onEdit}
+              onRemove={onRemove}
+              describe={(row) => ({
+                name: [row.make, row.model].filter(Boolean).join(" ") || humanize(row.type),
+                detail: [humanize(row.type), row.year].filter(Boolean).join(", "),
+                value: row.current_value,
+              })}
+            />
+            <Card className="p-5">
+              <div className="flex items-center justify-between gap-4 mb-3">
+                <h2 className="font-semibold">Credit score</h2>
+                <Button size="sm" variant="secondary" onClick={() => setEditingCredit(true)}>
+                  {credit ? "Update" : "Add score"}
+                </Button>
+              </div>
+              {credit ? (
+                <>
+                  <p className="text-3xl font-semibold tnum tracking-tight">
+                    {credit.credit_score}{" "}
+                    <span className="text-base font-normal text-muted">
+                      {creditBand(credit.credit_score)}
+                    </span>
+                  </p>
+                  <p className="text-sm text-muted mt-1 tnum">
+                    {credit.credit_utilization ?? 0}% of your credit limit in use
+                  </p>
+                </>
+              ) : (
+                <p className="text-muted">
+                  Add your score from your latest bureau report to track it here.
+                </p>
+              )}
+            </Card>
+          </div>
+
+          {editing && (
+            <RecordModal
+              kind={editing.kind}
+              record={editing.record}
+              onClose={() => setEditing(null)}
+            />
+          )}
+          {editingCredit && (
+            <CreditModal credit={credit} onClose={() => setEditingCredit(false)} />
+          )}
+          {removing && (
+            <ConfirmModal
+              title={`Remove ${removing.name}?`}
+              description={`This removes the ${KINDS[removing.kind].noun} from your net worth.`}
+              action="Remove"
+              onClose={() => setRemoving(null)}
+              onConfirm={async () => {
+                await api(`${KINDS[removing.kind].path}/${removing.record.id}`, {
+                  method: "DELETE",
+                });
+                await refresh();
+                toast.success(`${removing.name} removed`);
+              }}
+            />
+          )}
+        </>
+      )}
+    </Loaded>
+  );
+}

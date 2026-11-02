@@ -1,255 +1,67 @@
 # Munim.ai Frontend
 
-A React application with Clerk authentication integration, organized with separate pages and components folders.
+The React app for Munim.AI, an AI-assisted personal finance and investing product. Built with Vite, Tailwind CSS and framer-motion.
 
-## 🚀 Quick Start
+## Quick start
 
-### 1. Install Dependencies
+1. Install dependencies:
 
-```bash
-npm install
-```
-
-### 2. Clerk Authentication Setup
-
-#### Step 1: Create a Clerk Account
-
-1. Go to [https://clerk.com/](https://clerk.com/) and sign up for a free account
-2. Click "Add application" to create a new application
-3. Choose your application name (e.g., "Munim.ai")
-4. Select your preferred authentication methods (Email, Google, GitHub, etc.)
-
-#### Step 2: Get Your Clerk Keys
-
-1. In your Clerk dashboard, navigate to "API Keys" in the sidebar
-2. Copy your **Publishable Key** (starts with `pk_test_` or `pk_live_`)
-3. Keep your **Secret Key** secure (you won't need it for this frontend-only setup)
-
-#### Step 3: Configure Environment Variables
-
-1. Copy the example environment file:
    ```bash
-   cp .env.example .env.local
-   ```
-2. Open `.env.local` and replace the placeholder with your actual Clerk Publishable Key:
-   ```bash
-   VITE_CLERK_PUBLISHABLE_KEY=pk_test_your_actual_key_here
+   npm install
    ```
 
-#### Step 4: Configure Clerk Dashboard Settings
+2. Copy `.env.example` to `.env.local` and set `VITE_API_URL` to your API. It defaults to `http://localhost:5001/api`.
 
-In your Clerk dashboard, configure the following settings:
+3. Start the API from `server/` (see the root README), then run the app:
 
-1. **Go to "Paths" in the sidebar:**
+   ```bash
+   npm run dev
+   ```
 
-   - Sign-in URL: `/sign-in`
-   - Sign-up URL: `/sign-up`
-   - Home URL: `/dashboard`
-   - After sign-out URL: `/`
+The app runs at `http://localhost:5173`.
 
-2. **Go to "Sessions" (optional):**
+## How sign-in works
 
-   - Set session timeout as needed
-   - Configure multi-session handling
+1. A visitor creates an account at `/sign-up` or signs in at `/sign-in`.
+2. The API returns a JWT, which `AuthContext` keeps in `localStorage` and sends as a bearer token.
+3. `ProtectedRoute` sends signed-out visitors to `/sign-in`, and anyone without an investor profile to `/onboarding`.
+4. `/onboarding` asks the investor questionnaire. The questions come from the API, which also scores the answers.
+5. The result is shown once, then lives in Settings, where the questionnaire can be retaken.
 
-3. **Go to "User & Authentication" > "Email, Phone, Username":**
-   - Configure which fields are required
-   - Set up email verification if needed
-
-### 3. Run the Application
-
-```bash
-npm run dev
-```
-
-Your app will be available at `http://localhost:5173`
-
-## 🔐 JWT Authentication & Backend Integration
-
-### JWT Token Structure
-
-Clerk provides JWT tokens that can be verified by your backend. The token contains:
-
-```json
-{
-  "iss": "https://clerk.your-domain.com",
-  "sub": "user_2ABC123DEF456",
-  "aud": "your-app-id",
-  "exp": 1234567890,
-  "iat": 1234567890,
-  "azp": "your-app-id",
-  "session_id": "sess_2ABC123DEF456"
-}
-```
-
-### User Data Structure
-
-When sending user data to your backend, use this structure:
-
-```json
-{
-  "id": "user_2ABC123DEF456",
-  "email": "user@example.com",
-  "firstName": "John",
-  "lastName": "Doe",
-  "username": "johndoe",
-  "imageUrl": "https://img.clerk.com/...",
-  "createdAt": "2024-01-01T00:00:00.000Z",
-  "updatedAt": "2024-01-01T00:00:00.000Z"
-}
-```
-
-### Making Authenticated API Calls
-
-Use the `useClerkAuth` hook for backend communication:
-
-```javascript
-import { useClerkAuth } from "./utils/auth";
-
-function MyComponent() {
-  const { makeAuthenticatedRequest, getUserData } = useClerkAuth();
-
-  const sendDataToBackend = async () => {
-    try {
-      const userData = getUserData();
-      const response = await makeAuthenticatedRequest("/api/user", {
-        method: "POST",
-        body: JSON.stringify(userData),
-      });
-      const result = await response.json();
-      console.log("Success:", result);
-    } catch (error) {
-      console.error("Error:", error);
-    }
-  };
-
-  return <button onClick={sendDataToBackend}>Send Data to Backend</button>;
-}
-```
-
-### Backend Verification (Node.js Example)
-
-```javascript
-const { ClerkExpressRequireAuth } = require("@clerk/clerk-sdk-node");
-
-// Middleware to verify JWT
-app.use("/api", ClerkExpressRequireAuth());
-
-// Protected route
-app.post("/api/user", (req, res) => {
-  const userId = req.auth.userId;
-  const userData = req.body;
-
-  // Process user data
-  console.log("Authenticated user:", userId);
-  console.log("User data:", userData);
-
-  res.json({ success: true, userId });
-});
-```
-
-## 📁 Project Structure
-
-```
-src/
-├── components/          # Reusable UI components
-│   └── ProtectedRoute.jsx
-├── pages/              # Page components
-│   ├── LandingPage.jsx    # Home page for unauthenticated users
-│   ├── SignInPage.jsx     # Sign-in page
-│   ├── SignUpPage.jsx     # Sign-up page
-│   └── DashboardPage.jsx  # Protected dashboard
-├── utils/              # Utility functions
-│   └── auth.js           # JWT authentication utilities
-├── App.jsx             # Main app with routing
-├── main.jsx           # App entry point with ClerkProvider
-└── index.css          # Global styles with dark mode
-```
-
-## ✨ Features
-
-- ✅ **Secure Authentication** - Powered by Clerk with JWT tokens
-- ✅ **Protected Routes** - Automatic redirects for unauthenticated users
-- ✅ **Clean Architecture** - Separated pages and components
-- ✅ **Dark Mode** - Modern dark theme throughout
-- ✅ **JWT Integration** - Ready for backend API communication
-- ✅ **User Management** - Profile, sign-out functionality
-- ✅ **Loading States** - Smooth user experience
-
-## 🔐 Authentication Flow
-
-1. **Unauthenticated users** → Landing page with Sign In/Sign Up options
-2. **Sign In/Sign Up** → Clerk-hosted authentication forms
-3. **Successful authentication** → Automatic redirect to dashboard
-4. **Protected routes** → Require authentication, redirect to sign-in if needed
-5. **API calls** → Include JWT token in Authorization header
-6. **Sign out** → Return to landing page
-
-## 🛠️ Customization
-
-### Styling Clerk Components
-
-You can customize Clerk's appearance in your page components:
+## Using auth in a component
 
 ```jsx
-<SignIn
-  appearance={{
-    elements: {
-      formButtonPrimary: "bg-blue-600 hover:bg-blue-700 text-white font-medium",
-      card: "shadow-lg border border-gray-200",
-      headerTitle: "text-gray-900 font-semibold",
-      headerSubtitle: "text-gray-600",
-      socialButtonsBlockButton: "border border-gray-300 hover:bg-gray-50",
-      formFieldInput:
-        "border border-gray-300 focus:border-blue-500 focus:ring-blue-500",
-      footerActionLink: "text-blue-600 hover:text-blue-700",
-    },
-  }}
+import { useAuth, useUser } from "../context/AuthContext";
+
+const { getToken, isLoaded, isSignedIn, signOut } = useAuth();
+const { user } = useUser(); // includes user.investorProfile
+
+const token = await getToken();
+```
+
+## Adding a protected route
+
+Wrap the page in `ProtectedRoute` in `src/App.jsx`:
+
+```jsx
+<Route
+  path="/my-page"
+  element={
+    <ProtectedRoute>
+      <MyPage />
+    </ProtectedRoute>
+  }
 />
 ```
 
-### Adding New Protected Routes
+## Project structure
 
-1. Create a new page component in `src/pages/`
-2. Add the route in `App.jsx` wrapped with `<ProtectedRoute>`
-
-### Environment Variables
-
-- `VITE_CLERK_PUBLISHABLE_KEY` - Your Clerk publishable key (required)
-
-## 🚨 Troubleshooting
-
-### Common Issues
-
-1. **"Missing Publishable Key" Error**
-
-   - Make sure `.env.local` exists and contains your Clerk publishable key
-   - Restart your dev server after adding environment variables
-
-2. **Infinite Redirect Loop**
-
-   - Check that your Clerk dashboard paths match your route configuration
-   - Ensure your publishable key is correct
-
-3. **Clerk Components Not Loading**
-
-   - Verify your Clerk publishable key is valid
-   - Check browser console for any errors
-
-4. **JWT Token Issues**
-   - Ensure your backend is configured to verify Clerk JWT tokens
-   - Check that the Authorization header is being sent correctly
-
-### Getting Help
-
-- [Clerk Documentation](https://clerk.com/docs)
-- [Clerk Discord Community](https://clerk.com/discord)
-- [GitHub Issues](https://github.com/clerkinc/javascript)
-
-## 📦 Dependencies
-
-- **@clerk/clerk-react**: Clerk authentication for React
-- **react-router-dom**: Client-side routing
-- **react**: UI library
-- **vite**: Build tool and dev server
-- **tailwindcss**: Utility-first CSS framework
+```
+src/
+├── components/   # Shared UI, including ProtectedRoute and RiskProfileSummary
+├── context/      # Auth, permissions and AI chat state
+├── pages/        # Route-level pages
+├── services/     # API client
+├── App.jsx       # Routes and providers
+└── main.jsx      # Entry point
+```

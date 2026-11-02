@@ -6,29 +6,38 @@ import multer from "multer"; // Import multer
 
 // Import routes
 import indexRouter from "./routes/index.js";
-import webhookRouter from "./routes/webhook.js";
-import financialRoutes from "./routes/financial.js";
+import authRoutes from "./routes/auth.js";
+import investorProfileRoutes from "./routes/investorProfile.js";
 import budgetRoutes from "./routes/budget.js";
 import accountRoutes from "./routes/account.js";
 import transactionRoutes from "./routes/transaction.js";
 import investmentRoutes from "./routes/investment.js";
-import queryRoutes from "./routes/query.js";
-import dashboardRoutes from "./routes/dashboard.js";
-import analyticsRoutes from "./routes/analytics.js";
 import permissionRoutes from "./routes/permissions.js";
-import dataRoutes from "./routes/data.js";
+import assistantRoutes from "./routes/assistant.js";
+import wealthRoutes from "./routes/wealth.js";
 import ingestRoutes from "./routes/ingest.js";
 import { startKeepAlive } from "./services/keepAlive.js";
 
 // Import middleware
 import { errorHandler } from "./middleware/errorHandler.js";
-import { withAuth, attachUser, requireAuth } from "./middleware/clerkAuth.js";
+import { withAuth, requireAuth } from "./middleware/auth.js";
 
 // Load environment variables
 dotenv.config();
 
+// Refuse to start without a signing secret rather than failing on first login
+if (!process.env.JWT_SECRET) {
+  console.error("JWT_SECRET is not set. See server/.env.example.");
+  process.exit(1);
+}
+
 // Create Express app
 const app = express();
+
+// Render sits one proxy in front of the app; needed for per-client rate limits
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
 
 // CORS configuration
 const corsOptions = {
@@ -42,7 +51,7 @@ const corsOptions = {
     "http://127.0.0.1:3000",
   ].filter(Boolean), // Filter out undefined if env var is missing
   credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: [
     "Content-Type",
     "Authorization",
@@ -59,20 +68,11 @@ const corsOptions = {
 // Middleware
 app.use(cors(corsOptions));
 
-// Mount webhook BEFORE any JSON parsing or auth middleware
-// Svix needs the raw unmodified body buffer to verify signatures
-app.use(
-  "/api/webhooks",
-  express.raw({ type: "application/json" }),
-  webhookRouter,
-);
-
-// Parse JSON payloads for all other routes
+// Parse JSON payloads
 app.use(express.json());
 
-// Apply Clerk auth middleware to all routes
+// Attach the signed-in user (if any) to all routes
 app.use(withAuth);
-app.use(attachUser);
 
 // Health check endpoint (no auth required)
 app.get("/health", (req, res) => {
@@ -95,15 +95,15 @@ const upload = multer({
 
 // Routes
 app.use("/", indexRouter);
+app.use("/api/auth", authRoutes);
+app.use("/api/investor-profile", investorProfileRoutes);
 app.use("/api/accounts", requireAuth, accountRoutes);
 app.use("/api/budgets", requireAuth, budgetRoutes);
 app.use("/api/investments", requireAuth, investmentRoutes);
 app.use("/api/transactions", requireAuth, transactionRoutes);
-app.use("/api/dashboard", requireAuth, dashboardRoutes);
-app.use("/api/analytics", requireAuth, analyticsRoutes);
 app.use("/api/permissions", requireAuth, permissionRoutes);
-app.use("/api/query", requireAuth, upload.any(), queryRoutes);
-app.use("/api/data", requireAuth, dataRoutes);
+app.use("/api/assistant", requireAuth, assistantRoutes);
+app.use("/api/wealth", requireAuth, wealthRoutes);
 app.use("/api/ingest", requireAuth, upload.any(), ingestRoutes);
 
 // Error handling middleware

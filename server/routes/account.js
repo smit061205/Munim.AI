@@ -5,7 +5,7 @@ import {
   updateAccount,
   deleteAccount,
 } from "../controllers/accountController.js";
-import { requireAuth } from "../middleware/clerkAuth.js";
+import { requireAuth } from "../middleware/auth.js";
 
 const router = express.Router();
 

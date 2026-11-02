@@ -36,8 +36,7 @@ const vehicleSchema = new mongoose.Schema({
 
 // Assets Schema
 const assetSchema = new mongoose.Schema({
-  user_id: { type: String, required: true }, // Links to Clerk user ID
-  clerkId: { type: String, required: true }, // Direct Clerk reference
+  user_id: { type: String, required: true },
   total_value: { type: Number, required: true, default: 0 },
   bank_accounts: [bankAccountSchema],
   real_estate: [realEstateSchema],
@@ -70,7 +69,6 @@ const liabilityItemSchema = new mongoose.Schema({
 // Liabilities Schema
 const liabilitySchema = new mongoose.Schema({
   user_id: { type: String, required: true },
-  clerkId: { type: String, required: true },
   liabilities: [liabilityItemSchema],
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now },
@@ -91,7 +89,6 @@ const transactionItemSchema = new mongoose.Schema({
 // Transaction Schema
 const transactionSchema = new mongoose.Schema({
   user_id: { type: String, required: true },
-  clerkId: { type: String, required: true },
   transactions: [transactionItemSchema],
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now },
@@ -100,8 +97,7 @@ const transactionSchema = new mongoose.Schema({
 // EPF Schema
 const epfSchema = new mongoose.Schema({
   user_id: { type: String, required: true },
-  clerkId: { type: String, required: true },
-  uan: { type: String, unique: true },
+  uan: String,
   member_id: String,
   employer_contribution: { type: Number, default: 0 },
   employee_contribution: { type: Number, default: 0 },
@@ -118,8 +114,7 @@ const epfSchema = new mongoose.Schema({
 // Credit Score Schema
 const creditScoreSchema = new mongoose.Schema({
   user_id: { type: String, required: true },
-  clerkId: { type: String, required: true },
-  credit_score: { type: Number, min: 300, max: 850 },
+  credit_score: { type: Number, min: 300, max: 900 },
   payment_history: {
     type: String,
     enum: ["poor", "fair", "good", "excellent"],
@@ -149,6 +144,7 @@ const mutualFundSchema = new mongoose.Schema({
   current_value: { type: Number, default: 0 },
   nav: Number,
   category: String,
+  invested_amount: { type: Number, default: 0 },
   created_at: { type: Date, default: Date.now },
 });
 
@@ -164,7 +160,6 @@ const portfolioSchema = new mongoose.Schema({
 // Investments Schema
 const investmentSchema = new mongoose.Schema({
   user_id: { type: String, required: true },
-  clerkId: { type: String, required: true },
   portfolio: portfolioSchema,
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now },
@@ -195,7 +190,6 @@ const budgetItemSchema = new mongoose.Schema({
 // Budget Schema
 const budgetSchema = new mongoose.Schema({
   user_id: { type: String, required: true },
-  clerkId: { type: String, required: true },
   budgets: [budgetItemSchema],
   totalBudget: { type: Number, default: 0 },
   totalSpent: { type: Number, default: 0 },

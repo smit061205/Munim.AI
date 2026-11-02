@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 const userPermissionsSchema = new mongoose.Schema({
-  clerkId: {
+  user_id: {
     type: String,
     required: true,
     unique: true,
@@ -53,13 +53,13 @@ userPermissionsSchema.pre("save", function (next) {
 });
 
 // Static method to get user permissions with defaults
-userPermissionsSchema.statics.getUserPermissions = async function (clerkId) {
-  let userPermissions = await this.findOne({ clerkId });
+userPermissionsSchema.statics.getUserPermissions = async function (userId) {
+  let userPermissions = await this.findOne({ user_id: userId });
 
   // If no permissions found, create default permissions
   if (!userPermissions) {
     userPermissions = await this.create({
-      clerkId,
+      user_id: userId,
       permissions: {
         assets: true,
         liabilities: true,
@@ -77,12 +77,12 @@ userPermissionsSchema.statics.getUserPermissions = async function (clerkId) {
 
 // Static method to update specific permission
 userPermissionsSchema.statics.updatePermission = async function (
-  clerkId,
+  userId,
   category,
   allowed,
 ) {
   const result = await this.findOneAndUpdate(
-    { clerkId },
+    { user_id: userId },
     {
       $set: {
         [`permissions.${category}`]: allowed,

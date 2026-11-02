@@ -1,17 +1,113 @@
-@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap");
 @import "tailwindcss";
 
-* {
-  font-family: "Poppins", sans-serif;
+@theme {
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Newsreader", Georgia, serif;
+
+  --color-canvas: #fdfdfc;
+  --color-surface: #ffffff;
+  --color-wash: #f4f4f1;
+  --color-line: #e8e8e4;
+  --color-line-strong: #d4d4ce;
+  --color-ink: #0f1b2d;
+  --color-muted: #5b6675;
+  --color-faint: #7f8894;
+
+  --color-accent: #1b2b4b;
+  --color-accent-hover: #2a3d63;
+  --color-accent-soft: #e9ecf2;
+
+  --color-gain: #0e7c52;
+  --color-gain-soft: #e6f3ee;
+  --color-loss: #c03a2b;
+  --color-loss-soft: #fbecea;
+  --color-warn: #8f6200;
+  --color-warn-soft: #fbf2dd;
+
+  --color-series-1: #2f6bb5;
+  --color-series-2: #17a08c;
+  --color-series-3: #c98a12;
+  --color-series-4: #8b62c4;
+  --color-series-5: #d5614a;
+  --color-series-other: #a3a9b1;
+}
+
+html {
+  color-scheme: light;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
-  padding: 0;
-  background-color: #0f172a;
-  color: #f1f5f9;
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
-html {
-  color-scheme: dark;
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Recharts draws a focus box around the chart on click */
+.recharts-wrapper:focus,
+.recharts-surface:focus,
+.recharts-sector:focus {
+  outline: none;
+}
+
+.prose-chat p {
+  margin: 0 0 0.6em;
+}
+.prose-chat p:last-child {
+  margin-bottom: 0;
+}
+.prose-chat ul,
+.prose-chat ol {
+  margin: 0 0 0.6em;
+  padding-left: 1.25em;
+}
+.prose-chat ul {
+  list-style: disc;
+}
+.prose-chat ol {
+  list-style: decimal;
+}
+.prose-chat strong {
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  @page {
+    margin: 16mm;
+  }
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+    font-size: 12px;
+  }
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
 }

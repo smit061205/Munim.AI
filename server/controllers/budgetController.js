@@ -7,9 +7,9 @@ import { ApiError } from "../middleware/errorHandler.js";
 export const getBudgets = async (req, res, next) => {
   try {
     console.log("getBudgets: Starting request for user:", req.auth.userId);
-    const clerkId = req.auth.userId;
+    const userId = req.auth.userId;
 
-    const budgetDoc = await Budget.findOne({ clerkId });
+    const budgetDoc = await Budget.findOne({ user_id: userId });
     console.log("getBudgets: Found budget document:", budgetDoc ? "Yes" : "No");
 
     if (!budgetDoc) {
@@ -45,7 +45,7 @@ export const getBudgets = async (req, res, next) => {
 // @access  Private
 export const createBudget = async (req, res, next) => {
   try {
-    const clerkId = req.auth.userId;
+    const userId = req.auth.userId;
     const { category, budgetAmount, period, startDate, endDate } = req.body;
 
     if (!category || !budgetAmount || !startDate || !endDate) {
@@ -55,7 +55,7 @@ export const createBudget = async (req, res, next) => {
       );
     }
 
-    let budgetDoc = await Budget.findOne({ clerkId });
+    let budgetDoc = await Budget.findOne({ user_id: userId });
 
     const newBudget = {
       id: `budget_${Date.now()}`,
@@ -72,8 +72,7 @@ export const createBudget = async (req, res, next) => {
     if (!budgetDoc) {
       // Create new budget document
       budgetDoc = await Budget.create({
-        user_id: clerkId,
-        clerkId,
+        user_id: userId,
         budgets: [newBudget],
         totalBudget: Number(budgetAmount),
         totalSpent: 0,
@@ -100,12 +99,12 @@ export const createBudget = async (req, res, next) => {
 // @access  Private
 export const updateBudget = async (req, res, next) => {
   try {
-    const clerkId = req.auth.userId;
+    const userId = req.auth.userId;
     const { budgetId } = req.params;
     const { category, budgetAmount, period, startDate, endDate, isActive } =
       req.body;
 
-    const budgetDoc = await Budget.findOne({ clerkId });
+    const budgetDoc = await Budget.findOne({ user_id: userId });
 
     if (!budgetDoc) {
       throw new ApiError(404, "Budget document not found");
@@ -151,10 +150,10 @@ export const updateBudget = async (req, res, next) => {
 // @access  Private
 export const deleteBudget = async (req, res, next) => {
   try {
-    const clerkId = req.auth.userId;
+    const userId = req.auth.userId;
     const { budgetId } = req.params;
 
-    const budgetDoc = await Budget.findOne({ clerkId });
+    const budgetDoc = await Budget.findOne({ user_id: userId });
 
     if (!budgetDoc) {
       throw new ApiError(404, "Budget document not found");
@@ -191,14 +190,14 @@ export const deleteBudget = async (req, res, next) => {
 // @access  Private
 export const updateBudgetSpending = async (req, res, next) => {
   try {
-    const clerkId = req.auth.userId;
+    const userId = req.auth.userId;
     const { category, amount, date } = req.body;
 
     if (!category || !amount || !date) {
       throw new ApiError(400, "Please provide category, amount, and date");
     }
 
-    const budgetDoc = await Budget.findOne({ clerkId });
+    const budgetDoc = await Budget.findOne({ user_id: userId });
 
     if (!budgetDoc) {
       return res.status(200).json({

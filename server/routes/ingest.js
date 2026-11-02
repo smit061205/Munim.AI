@@ -1,19 +1,19 @@
 import express from "express";
 import { handleAsync } from "../middleware/errorHandler.js";
-import { ensureAuth } from "../middleware/clerkAuth.js";
+import { requireAuth } from "../middleware/auth.js";
 import { IngestService } from "../services/ingestService.js";
 
 const router = express.Router();
 
 // All routes require auth
-router.use(ensureAuth);
+router.use(requireAuth);
 
 // POST /api/ingest/excel?target=transactions
 // Accepts multipart/form-data with files[] (handled by server-level multer)
 router.post(
   "/excel",
   handleAsync(async (req, res) => {
-    const clerkId = req.auth.userId;
+    const userId = req.auth.userId;
     const target = (req.query.target || "transactions").toLowerCase();
 
     if (!req.files || req.files.length === 0) {
@@ -34,7 +34,7 @@ router.post(
     let result;
     switch (target) {
       case "transactions":
-        result = await IngestService.ingestTransactions(clerkId, parsed);
+        result = await IngestService.ingestTransactions(userId, parsed);
         break;
       // Future targets (assets/liabilities/epf/creditScore/investments) can be added here
       default:

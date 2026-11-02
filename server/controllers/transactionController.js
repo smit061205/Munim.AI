@@ -4,9 +4,9 @@ import { v4 as uuidv4 } from "uuid";
 // Get all transactions for a user
 export const getTransactions = async (req, res) => {
   try {
-    const clerkId = req.auth.userId;
+    const userId = req.auth.userId;
 
-    let transactionDoc = await Transaction.findOne({ clerkId });
+    let transactionDoc = await Transaction.findOne({ user_id: userId });
 
     if (!transactionDoc) {
       return res.json({ success: true, data: [] });
@@ -28,7 +28,7 @@ export const getTransactions = async (req, res) => {
 // Create a new transaction
 export const createTransaction = async (req, res) => {
   try {
-    const clerkId = req.auth.userId;
+    const userId = req.auth.userId;
     const { date, amount, type, category, description, account } = req.body;
 
     // Validate required fields
@@ -70,12 +70,11 @@ export const createTransaction = async (req, res) => {
     };
 
     // Find or create transaction document
-    let transactionDoc = await Transaction.findOne({ clerkId });
+    let transactionDoc = await Transaction.findOne({ user_id: userId });
 
     if (!transactionDoc) {
       transactionDoc = new Transaction({
-        user_id: clerkId,
-        clerkId,
+        user_id: userId,
         transactions: [newTransaction],
       });
     } else {
@@ -101,11 +100,11 @@ export const createTransaction = async (req, res) => {
 // Update a transaction
 export const updateTransaction = async (req, res) => {
   try {
-    const clerkId = req.auth.userId;
+    const userId = req.auth.userId;
     const { transactionId } = req.params;
     const { date, amount, type, category, description, account } = req.body;
 
-    const transactionDoc = await Transaction.findOne({ clerkId });
+    const transactionDoc = await Transaction.findOne({ user_id: userId });
 
     if (!transactionDoc) {
       return res.status(404).json({
@@ -161,10 +160,10 @@ export const updateTransaction = async (req, res) => {
 // Delete a transaction
 export const deleteTransaction = async (req, res) => {
   try {
-    const clerkId = req.auth.userId;
+    const userId = req.auth.userId;
     const { transactionId } = req.params;
 
-    const transactionDoc = await Transaction.findOne({ clerkId });
+    const transactionDoc = await Transaction.findOne({ user_id: userId });
 
     if (!transactionDoc) {
       return res.status(404).json({

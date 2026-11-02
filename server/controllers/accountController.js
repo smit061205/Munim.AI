@@ -4,9 +4,9 @@ import { v4 as uuidv4 } from "uuid";
 // Get all accounts for a user
 export const getAccounts = async (req, res) => {
   try {
-    const clerkId = req.auth.userId;
+    const userId = req.auth.userId;
 
-    let assetDoc = await Asset.findOne({ clerkId });
+    let assetDoc = await Asset.findOne({ user_id: userId });
 
     if (!assetDoc) {
       return res.json({ success: true, data: [] });
@@ -28,7 +28,7 @@ export const getAccounts = async (req, res) => {
 // Create a new account
 export const createAccount = async (req, res) => {
   try {
-    const clerkId = req.auth.userId;
+    const userId = req.auth.userId;
     const { type, bank_name, balance, account_number } = req.body;
 
     // Validate required fields
@@ -58,12 +58,11 @@ export const createAccount = async (req, res) => {
     };
 
     // Find or create asset document
-    let assetDoc = await Asset.findOne({ clerkId });
+    let assetDoc = await Asset.findOne({ user_id: userId });
 
     if (!assetDoc) {
       assetDoc = new Asset({
-        user_id: clerkId,
-        clerkId,
+        user_id: userId,
         total_value: newAccount.balance,
         bank_accounts: [newAccount],
         real_estate: [],
@@ -101,11 +100,11 @@ export const createAccount = async (req, res) => {
 // Update an account
 export const updateAccount = async (req, res) => {
   try {
-    const clerkId = req.auth.userId;
+    const userId = req.auth.userId;
     const { accountId } = req.params;
     const { type, bank_name, balance, account_number } = req.body;
 
-    const assetDoc = await Asset.findOne({ clerkId });
+    const assetDoc = await Asset.findOne({ user_id: userId });
 
     if (!assetDoc) {
       return res.status(404).json({
@@ -159,10 +158,10 @@ export const updateAccount = async (req, res) => {
 // Delete an account
 export const deleteAccount = async (req, res) => {
   try {
-    const clerkId = req.auth.userId;
+    const userId = req.auth.userId;
     const { accountId } = req.params;
 
-    const assetDoc = await Asset.findOne({ clerkId });
+    const assetDoc = await Asset.findOne({ user_id: userId });
 
     if (!assetDoc) {
       return res.status(404).json({

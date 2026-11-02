@@ -1,4 +1,5 @@
 import XLSX from "xlsx";
+import { v4 as uuidv4 } from "uuid";
 import { Transaction } from "../models/Financial.js";
 
 const REQUIRED_TX_COLUMNS = ["date", "amount", "type", "category"]; // description/account optional
@@ -21,22 +22,41 @@ function parseNumber(val) {
   return NaN;
 }
 
+const pad = (value) => String(value).padStart(2, "0");
+
 function parseDateToISO(dateVal) {
   // Transaction schema expects a string; we store ISO yyyy-mm-dd to be consistent
-  try {
-    if (!dateVal) return "";
-    const d = new Date(dateVal);
-    if (Number.isNaN(d.getTime())) return String(dateVal);
-    return d.toISOString().slice(0, 10);
-  } catch {
-    return String(dateVal || "");
+  const text = String(dateVal || "").trim();
+  if (!text) return "";
+
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+
+  // Indian statements put the day first
+  const dayFirst = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/);
+  if (dayFirst) {
+    const [, day, month, year] = dayFirst;
+    return `${year.length === 2 ? `20${year}` : year}-${pad(month)}-${pad(day)}`;
   }
+
+  // Local parts, because toISOString would move the date across midnight UTC
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}`;
 }
 
 export class IngestService {
+  // True when a chat message asks to save an attached file's rows
+  static wantsImport(text = "") {
+    const message = text.toLowerCase();
+    return (
+      /upload|ingest|import|save|add/.test(message) &&
+      /expense|transaction|spend/.test(message)
+    );
+  }
+
   // Return { parsed, meta }
   static parseExcel(buffer, fileName = "upload.xlsx") {
-    const workbook = XLSX.read(buffer, { type: "buffer" });
+    const workbook = XLSX.read(buffer, { type: "buffer", dateNF: "dd/mm/yyyy" });
     const parsed = {};
 
     workbook.SheetNames.forEach((sheetName) => {
@@ -69,10 +89,10 @@ export class IngestService {
 
   // Ingest transactions into the Transaction collection
   // Returns { inserted, skipped, errors }
-  static async ingestTransactions(clerkId, parsed) {
+  static async ingestTransactions(userId, parsed) {
     console.log(
-      " IngestService.ingestTransactions called with clerkId:",
-      clerkId
+      " IngestService.ingestTransactions called with userId:",
+      userId
     );
 
     let inserted = 0;
@@ -88,47 +108,21 @@ export class IngestService {
     const rows = firstSheet.data;
 
     console.log(
-      " Looking for existing Transaction document with clerkId:",
-      clerkId
+      " Looking for existing Transaction document with userId:",
+      userId
     );
-    let doc = await Transaction.findOne({ clerkId });
+    let doc = await Transaction.findOne({ user_id: userId });
 
-    // If no document found with current clerkId, check for old clerkId and update it
     if (!doc) {
-      const oldClerkId = "user_32eIuzzFAAlZ1JzWbY3Cp7ZBSzr";
-      console.log(
-        " No document found with current clerkId, checking for old clerkId:",
-        oldClerkId
-      );
-
-      const oldDoc = await Transaction.findOne({ clerkId: oldClerkId });
-      if (oldDoc) {
-        console.log(
-          " Found document with old clerkId, updating to new clerkId:",
-          clerkId
-        );
-        oldDoc.clerkId = clerkId;
-        oldDoc.user_id = clerkId;
-        await oldDoc.save();
-        doc = oldDoc;
-        console.log(
-          " Successfully updated clerkId from",
-          oldClerkId,
-          "to",
-          clerkId
-        );
-      } else {
-        console.log(" Creating new Transaction document for clerkId:", clerkId);
-        doc = await Transaction.create({
-          clerkId,
-          user_id: clerkId,
-          transactions: [],
-        });
-      }
+      console.log(" Creating new Transaction document for userId:", userId);
+      doc = await Transaction.create({
+        user_id: userId,
+        transactions: [],
+      });
     } else {
       console.log(" Found existing Transaction document:", {
         docId: doc._id,
-        clerkId: doc.clerkId,
+        userId: doc.user_id,
         existingTransactions: doc.transactions.length,
       });
     }
@@ -175,9 +169,11 @@ export class IngestService {
         finalType = amt >= 0 ? "income" : "expense";
       }
 
-      const normalizedAmount = Math.abs(amt);
+      const normalizedAmount =
+        finalType === "expense" ? -Math.abs(amt) : Math.abs(amt);
 
       const tx = {
+        id: uuidv4(),
         date: dateISO,
         amount: normalizedAmount,
         type: finalType,

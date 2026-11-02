@@ -6,7 +6,7 @@ import {
   deleteBudget,
   updateBudgetSpending,
 } from "../controllers/budgetController.js";
-import { requireAuth } from "../middleware/clerkAuth.js";
+import { requireAuth } from "../middleware/auth.js";
 
 const router = express.Router();
 

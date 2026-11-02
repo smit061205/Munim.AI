@@ -1,5 +1,4 @@
 import UserPermissions from "../models/UserPermissions.js";
-import { requireAuth } from "@clerk/clerk-sdk-node";
 
 // Get user permissions
 export const getUserPermissions = async (req, res) => {
@@ -50,6 +49,7 @@ export const updatePermission = async (req, res) => {
       "investments",
       "epf",
       "creditScore",
+      "aiChat",
     ];
     if (!validCategories.includes(category)) {
       return res.status(400).json({

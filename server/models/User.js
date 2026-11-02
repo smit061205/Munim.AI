@@ -1,15 +1,39 @@
 import mongoose from 'mongoose';
 
-const userSchema = new mongoose.Schema({
-  clerkId: {
-    type: String,
-    required: true,
-    unique: true
+const investorProfileSchema = new mongoose.Schema({
+  answers: {
+    type: Map,
+    of: String
   },
+  riskProfile: {
+    type: String,
+    enum: ['conservative', 'moderately_conservative', 'balanced', 'growth', 'aggressive']
+  },
+  riskLabel: String,
+  description: String,
+  allocation: {
+    equity: Number,
+    debt: Number,
+    gold: Number
+  },
+  score: Number,
+  maxScore: Number,
+  capReasons: [String],
+  version: Number,
+  completedAt: Date
+}, { _id: false });
+
+const userSchema = new mongoose.Schema({
   email: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
+    lowercase: true,
+    trim: true
+  },
+  passwordHash: {
+    type: String,
+    select: false
   },
   firstName: {
     type: String,
@@ -17,15 +41,37 @@ const userSchema = new mongoose.Schema({
   },
   lastName: {
     type: String,
-    required: true
+    default: ''
   },
   profileImage: {
     type: String
+  },
+  phone: {
+    type: String
+  },
+  preferences: {
+    dateFormat: {
+      type: String,
+      enum: ["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"],
+      default: "DD/MM/YYYY"
+    },
+    insights: {
+      budgets: { type: Boolean, default: true },
+      allocation: { type: Boolean, default: true },
+      safety: { type: Boolean, default: true }
+    }
+  },
+  hasSampleData: {
+    type: Boolean,
+    default: false
   },
   role: {
     type: String,
     enum: ['user', 'admin'],
     default: 'user'
+  },
+  investorProfile: {
+    type: investorProfileSchema
   },
   createdAt: {
     type: Date,

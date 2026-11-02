@@ -1,32 +1,154 @@
-import { SignUp } from "@clerk/clerk-react";
+import React, { useState } from "react";
+import { Link, Navigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import AuthShell, {
+  inputClassName,
+  primaryButtonClassName,
+} from "../components/AuthShell";
 
 export default function SignUpPage() {
+  const { isSignedIn, signUp } = useAuth();
+  const [form, setForm] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    password: "",
+  });
+  const [error, setError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  // A new account has no investor profile, so this lands on the questionnaire
+  if (isSignedIn) {
+    return <Navigate to="/home" replace />;
+  }
+
+  const handleChange = (e) => {
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      await signUp(form);
+    } catch (err) {
+      setError(err.message);
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <div className="flex justify-center items-center min-h-screen bg-slate-900">
-      <SignUp
-        routing="path"
-        path="/sign-up"
-        signInUrl="/sign-in"
-        redirectUrl="/dashboard"
-        appearance={{
-          baseTheme: "dark",
-          elements: {
-            formButtonPrimary:
-              "bg-green-600 hover:bg-green-700 text-white font-medium",
-            card: "shadow-lg border border-slate-700 bg-slate-800",
-            headerTitle: "text-white font-semibold",
-            headerSubtitle: "text-slate-300",
-            socialButtonsBlockButton:
-              "border border-slate-600 hover:bg-slate-700 text-white",
-            formFieldInput:
-              "border border-slate-600 focus:border-green-500 focus:ring-green-500 bg-slate-700 text-white",
-            footerActionLink: "text-green-400 hover:text-green-300",
-            formFieldLabel: "text-slate-300",
-            dividerLine: "bg-slate-600",
-            dividerText: "text-slate-400",
-          },
-        }}
-      />
-    </div>
+    <AuthShell
+      title="Create your account"
+      subtitle="Next, a few questions to work out how you should invest."
+      footer={
+        <>
+          Already have an account?{" "}
+          <Link
+            to="/sign-in"
+            className="text-accent underline underline-offset-2"
+          >
+            Sign in
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div>
+            <label
+              htmlFor="firstName"
+              className="block text-sm font-medium text-ink mb-2"
+            >
+              First name
+            </label>
+            <input
+              id="firstName"
+              name="firstName"
+              type="text"
+              autoComplete="given-name"
+              required
+              value={form.firstName}
+              onChange={handleChange}
+              className={inputClassName}
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="lastName"
+              className="block text-sm font-medium text-ink mb-2"
+            >
+              Last name
+            </label>
+            <input
+              id="lastName"
+              name="lastName"
+              type="text"
+              autoComplete="family-name"
+              value={form.lastName}
+              onChange={handleChange}
+              className={inputClassName}
+            />
+          </div>
+        </div>
+        <div>
+          <label
+            htmlFor="email"
+            className="block text-sm font-medium text-ink mb-2"
+          >
+            Email
+          </label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            value={form.email}
+            onChange={handleChange}
+            className={inputClassName}
+          />
+        </div>
+        <div>
+          <label
+            htmlFor="password"
+            className="block text-sm font-medium text-ink mb-2"
+          >
+            Password
+          </label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={8}
+            aria-describedby="password-hint"
+            value={form.password}
+            onChange={handleChange}
+            className={inputClassName}
+          />
+          <p id="password-hint" className="text-muted text-sm mt-2">
+            At least 8 characters
+          </p>
+        </div>
+
+        {error && (
+          <p role="alert" className="text-loss text-sm">
+            {error}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={submitting}
+          className={primaryButtonClassName}
+        >
+          {submitting ? "Creating account..." : "Create account"}
+        </button>
+      </form>
+    </AuthShell>
   );
 }
