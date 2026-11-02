@@ -1,16 +1,25 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { api } from "../lib/api";
 import AuthShell, {
   inputClassName,
   primaryButtonClassName,
 } from "../components/AuthShell";
 
 export default function SignInPage() {
-  const { isSignedIn, signIn } = useAuth();
+  const { isSignedIn, signIn, signInDemo } = useAuth();
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [demoEnabled, setDemoEnabled] = useState(false);
+
+  // The server only offers the demo account in development
+  useEffect(() => {
+    api("/auth/demo")
+      .then((data) => setDemoEnabled(!!data.enabled))
+      .catch(() => setDemoEnabled(false));
+  }, []);
 
   if (isSignedIn) {
     return <Navigate to="/home" replace />;
@@ -27,6 +36,17 @@ export default function SignInPage() {
 
     try {
       await signIn(form);
+    } catch (err) {
+      setError(err.message);
+      setSubmitting(false);
+    }
+  };
+
+  const handleDemo = async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await signInDemo();
     } catch (err) {
       setError(err.message);
       setSubmitting(false);
@@ -101,6 +121,23 @@ export default function SignInPage() {
           {submitting ? "Signing in..." : "Sign in"}
         </button>
       </form>
+
+      {demoEnabled && (
+        <div className="mt-6 pt-6 border-t border-line">
+          <button
+            type="button"
+            onClick={handleDemo}
+            disabled={submitting}
+            className="w-full h-11 px-6 inline-flex items-center justify-center border border-line-strong hover:bg-wash disabled:opacity-50 disabled:cursor-not-allowed text-ink font-medium rounded-lg transition-colors"
+          >
+            Use the demo account
+          </button>
+          <p className="text-sm text-muted mt-2">
+            Signs in to a shared account with sample data. Only shown while
+            developing.
+          </p>
+        </div>
+      )}
     </AuthShell>
   );
 }

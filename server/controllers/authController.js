@@ -3,7 +3,15 @@ import User from "../models/User.js";
 import { ApiError } from "../middleware/errorHandler.js";
 import { signToken } from "../middleware/auth.js";
 import UserPermissions from "../models/UserPermissions.js";
-import { clearFinancialData } from "../services/seedService.js";
+import {
+  clearFinancialData,
+  hasFinancialData,
+  loadSampleData,
+} from "../services/seedService.js";
+import {
+  QUESTIONNAIRE_VERSION,
+  assessAnswers,
+} from "../services/investorProfileService.js";
 import { clearAssistantData } from "./assistantController.js";
 
 const BCRYPT_ROUNDS = 12;
@@ -127,6 +135,68 @@ export const loginUser = async (req, res, next) => {
     res.status(200).json({
       success: true,
       token: signToken(user._id.toString()),
+      user: toPublicUser(user),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const DEMO_EMAIL = "demo@munim.local";
+const DEMO_ANSWERS = {
+  goal: "wealth",
+  horizon: "over_10y",
+  age: "25_34",
+  income: "10_25l",
+  monthlySurplus: "15_50k",
+  emergencyFund: "3_6m",
+  emiBurden: "20_40",
+  experience: "funds",
+  drawdownReaction: "hold",
+  returnRange: "wide",
+};
+
+// Off unless DEMO_ACCOUNT=true, and never in production, since anyone who
+// can reach the API could sign in as the demo user
+export const isDemoEnabled = () =>
+  process.env.DEMO_ACCOUNT === "true" &&
+  process.env.NODE_ENV !== "production";
+
+// @desc    Sign in to a shared demo account with sample data, for local testing
+// @route   POST /api/auth/demo
+// @access  Public, development only
+export const signInDemo = async (req, res, next) => {
+  try {
+    if (!isDemoEnabled()) {
+      throw new ApiError(404, "The demo account is turned off");
+    }
+
+    // The demo user has no password, so it can only be reached from here
+    const user = await User.findOneAndUpdate(
+      { email: DEMO_EMAIL },
+      { $setOnInsert: { email: DEMO_EMAIL, firstName: "Demo", lastName: "User" } },
+      { upsert: true, new: true },
+    );
+    const userId = user._id.toString();
+
+    if (!user.investorProfile?.riskProfile) {
+      user.investorProfile = {
+        ...assessAnswers(DEMO_ANSWERS),
+        answers: DEMO_ANSWERS,
+        version: QUESTIONNAIRE_VERSION,
+        completedAt: new Date(),
+      };
+    }
+    if (!(await hasFinancialData(userId))) {
+      await loadSampleData(userId);
+      user.hasSampleData = true;
+    }
+    await user.save();
+    await UserPermissions.getUserPermissions(userId);
+
+    res.json({
+      success: true,
+      token: signToken(userId),
       user: toPublicUser(user),
     });
   } catch (error) {

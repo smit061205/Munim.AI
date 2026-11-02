@@ -75,6 +75,12 @@ export const AuthProvider = ({ children }) => {
     [startSession],
   );
 
+  const signInDemo = useCallback(
+    async () =>
+      startSession(await api("/auth/demo", { method: "POST" })),
+    [startSession],
+  );
+
   const signUp = useCallback(
     async (details) =>
       startSession(
@@ -119,6 +125,7 @@ export const AuthProvider = ({ children }) => {
       user,
       getToken,
       signIn,
+      signInDemo,
       signUp,
       signOut,
       fetchQuestionnaire,
@@ -131,6 +138,7 @@ export const AuthProvider = ({ children }) => {
       user,
       getToken,
       signIn,
+      signInDemo,
       signUp,
       signOut,
       fetchQuestionnaire,

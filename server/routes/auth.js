@@ -7,6 +7,8 @@ import {
   updateCurrentUser,
   changePassword,
   deleteAccount,
+  signInDemo,
+  isDemoEnabled,
 } from "../controllers/authController.js";
 import { requireAuth } from "../middleware/auth.js";
 
@@ -27,6 +29,8 @@ const credentialsLimiter = rateLimit({
 
 router.post("/register", credentialsLimiter, registerUser);
 router.post("/login", credentialsLimiter, loginUser);
+router.get("/demo", (req, res) => res.json({ enabled: isDemoEnabled() }));
+router.post("/demo", credentialsLimiter, signInDemo);
 router.get("/me", requireAuth, getCurrentUser);
 router.patch("/me", requireAuth, updateCurrentUser);
 router.delete("/me", requireAuth, deleteAccount);
