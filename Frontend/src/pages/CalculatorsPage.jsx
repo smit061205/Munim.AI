@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import {
   comparePrepayment,
   finiteOr,
+  planDebtPayoff,
   planRetirement,
   projectSip,
 } from "../lib/calculators";
@@ -11,6 +12,7 @@ import { formatCompact, formatMoney, humanize } from "../lib/format";
 import Loaded from "../components/Loaded";
 import { GrowthChart, SERIES } from "../components/charts";
 import {
+  Button,
   Card,
   Field,
   Input,
@@ -332,10 +334,110 @@ const PrepaymentCalculator = ({ overview, expectedReturn }) => {
   );
 };
 
+const years = (months) => `${Math.floor(months / 12)}y ${months % 12}m`;
+
+const DebtPayoffCalculator = ({ overview }) => {
+  const [debts, setDebts] = useState(() =>
+    overview.liabilities.items.map((item) => ({
+      name: humanize(item.type),
+      balance: item.remaining_balance,
+      rate: item.interest_rate ?? 0,
+      minimum: item.monthly_payment || 0,
+    })),
+  );
+  const [extra, setExtra] = useState(5000);
+  const update = (index, key) => (event) =>
+    setDebts(debts.map((debt, position) => (position === index ? { ...debt, [key]: event.target.value } : debt)));
+
+  const result = useMemo(
+    () =>
+      planDebtPayoff({
+        debts: debts.map((debt) => ({ ...debt, balance: finiteOr(debt.balance), rate: finiteOr(debt.rate), minimum: finiteOr(debt.minimum) })),
+        extra: finiteOr(extra),
+      }),
+    [debts, extra],
+  );
+
+  return (
+    <Layout
+      inputs={
+        <>
+          {debts.map((debt, index) => (
+            <div key={index} className="space-y-2 pb-3 border-b border-line">
+              <Input aria-label="Debt name" value={debt.name} onChange={update(index, "name")} />
+              <div className="grid grid-cols-3 gap-2">
+                <Field label="Owed"><Input type="number" min="0" value={debt.balance} onChange={update(index, "balance")} /></Field>
+                <Field label="Rate %"><Input type="number" min="0" step="any" value={debt.rate} onChange={update(index, "rate")} /></Field>
+                <Field label="EMI"><Input type="number" min="0" value={debt.minimum} onChange={update(index, "minimum")} /></Field>
+              </div>
+            </div>
+          ))}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setDebts([...debts, { name: `Debt ${debts.length + 1}`, balance: 100000, rate: 12, minimum: 5000 }])}
+          >
+            Add a debt
+          </Button>
+          <Field label="Extra each month" hint="On top of every EMI. It goes to one debt at a time.">
+            <Input type="number" min="0" value={extra} onChange={(event) => setExtra(event.target.value)} />
+          </Field>
+        </>
+      }
+    >
+      {result.error ? (
+        <Card className="p-5"><p className="text-muted">{result.error}</p></Card>
+      ) : (
+        <>
+          <p className="font-display text-2xl leading-snug">
+            Paying the highest rate first clears everything in {years(result.avalanche.months)} and saves{" "}
+            {formatMoney(result.minimumOnly.interest - result.avalanche.interest)} of interest against paying only the EMIs.
+          </p>
+          <div className="grid grid-cols-2 @2xl:grid-cols-3 gap-6">
+            <Stat label="Highest rate first" value={formatMoney(result.avalanche.interest)}>
+              <span className="text-muted">interest, done in {years(result.avalanche.months)}</span>
+            </Stat>
+            <Stat label="Smallest balance first" value={formatMoney(result.snowball.interest)}>
+              <span className="text-muted">interest, done in {years(result.snowball.months)}</span>
+            </Stat>
+            <Stat label="EMIs only" value={formatMoney(result.minimumOnly.interest)}>
+              <span className="text-muted">interest, done in {years(result.minimumOnly.months)}</span>
+            </Stat>
+          </div>
+          <Card className="p-5">
+            <GrowthChart
+              data={result.rows.map((row) => ({ ...row, year: Math.round((row.month / 12) * 10) / 10 }))}
+              series={[
+                { key: "avalanche", label: "Highest rate first", color: SERIES[0] },
+                { key: "snowball", label: "Smallest balance first", color: SERIES[2] },
+              ]}
+            />
+          </Card>
+          <Card className="p-5">
+            <h3 className="font-medium mb-2">Order, highest rate first</h3>
+            <ol className="divide-y divide-line">
+              {result.avalanche.order.map((debt) => (
+                <li key={debt.name} className="flex justify-between gap-4 py-2">
+                  <span>{debt.name}</span>
+                  <span className="text-muted tnum">cleared in {years(debt.paidOffMonth ?? 0)}</span>
+                </li>
+              ))}
+            </ol>
+          </Card>
+          <Assumption>
+            Smallest balance first costs {formatMoney(Math.max(result.saving, 0))} more but clears single debts sooner, which some people find easier to stick with.
+          </Assumption>
+        </>
+      )}
+    </Layout>
+  );
+};
+
 const CALCULATORS = {
   sip: { label: "SIP", Component: SipCalculator },
   retirement: { label: "Retirement", Component: RetirementCalculator },
   prepay: { label: "Prepay or invest", Component: PrepaymentCalculator },
+  debts: { label: "Debt payoff", Component: DebtPayoffCalculator },
 };
 
 export default function CalculatorsPage() {

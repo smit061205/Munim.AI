@@ -9,7 +9,8 @@ const router = express.Router();
 router.use(requireAuth);
 
 // POST /api/ingest/excel?target=transactions
-// Accepts multipart/form-data with files[] (handled by server-level multer)
+// Accepts a spreadsheet (.xlsx, .xls, .csv) or a PDF bank statement as
+// multipart/form-data files[] (handled by server-level multer)
 router.post(
   "/excel",
   handleAsync(async (req, res) => {
@@ -19,29 +20,31 @@ router.post(
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({
         success: false,
-        message: "No files uploaded. Attach an .xlsx or .xls file.",
+        message: "No file uploaded. Attach a spreadsheet or a PDF bank statement.",
+      });
+    }
+    if (target !== "transactions") {
+      return res.status(400).json({
+        success: false,
+        message: `Unsupported target: ${target}`,
       });
     }
 
-    // Use the first file for now; can be extended to multi-file batch
     const file = req.files[0];
-
-    const { parsed, meta } = IngestService.parseExcel(
-      file.buffer,
-      file.originalname
-    );
-
     let result;
-    switch (target) {
-      case "transactions":
-        result = await IngestService.ingestTransactions(userId, parsed);
-        break;
-      // Future targets (assets/liabilities/epf/creditScore/investments) can be added here
-      default:
-        return res.status(400).json({
-          success: false,
-          message: `Unsupported target: ${target}`,
-        });
+    let meta = { sheets: [], rowsBySheet: {} };
+
+    if (/\.pdf$/i.test(file.originalname)) {
+      try {
+        const rows = await IngestService.parsePdf(userId, file.buffer, req.body.password || "");
+        result = await IngestService.ingestTransactions(userId, null, { rows });
+      } catch (error) {
+        return res.status(error.status || 400).json({ success: false, message: error.message });
+      }
+    } else {
+      const parsedFile = IngestService.parseExcel(file.buffer, file.originalname);
+      meta = parsedFile.meta;
+      result = await IngestService.ingestTransactions(userId, parsedFile.parsed);
     }
 
     return res.json({

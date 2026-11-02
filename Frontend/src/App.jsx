@@ -21,6 +21,7 @@ import AccountsPage from "./pages/AccountsPage";
 import GoalsPage from "./pages/GoalsPage";
 import CalculatorsPage from "./pages/CalculatorsPage";
 import ReportsPage from "./pages/ReportsPage";
+import TaxPage from "./pages/TaxPage";
 import AssistantPage from "./pages/AssistantPage";
 import SettingsPage from "./pages/SettingsPage";
 
@@ -54,6 +55,7 @@ function App() {
               <Route path="/cash-flow" element={<CashFlowPage />} />
               <Route path="/accounts" element={<AccountsPage />} />
               <Route path="/goals" element={<GoalsPage />} />
+              <Route path="/tax" element={<TaxPage />} />
               <Route path="/calculators" element={<CalculatorsPage />} />
               <Route path="/reports" element={<ReportsPage />} />
               <Route path="/assistant" element={<AssistantPage />} />

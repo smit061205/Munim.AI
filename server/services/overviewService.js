@@ -7,7 +7,32 @@ import {
   Liability,
   Transaction,
 } from "../models/Financial.js";
-import { Goal, NetWorthSnapshot } from "../models/Planning.js";
+import {
+  Bill,
+  Goal,
+  Insurance,
+  NetWorthSnapshot,
+} from "../models/Planning.js";
+import {
+  compareWithBenchmark,
+  holdingFlows,
+  holdingXirr,
+  missedSipDates,
+  nextSipDate,
+  otherInvestmentCost,
+  otherInvestmentSplit,
+  otherInvestmentTrades,
+  otherInvestmentValue,
+  todayKey,
+  xirr,
+} from "./returnsService.js";
+import { BENCHMARK, getHistory, peekHistory } from "./marketDataService.js";
+import { refreshIfStale } from "./priceService.js";
+import {
+  buildUpcoming,
+  findRecurring,
+  findUnusualActivity,
+} from "./cashflowInsightsService.js";
 
 const CASHFLOW_MONTHS = 12;
 const SPENDING_WINDOW_DAYS = 90;
@@ -36,9 +61,22 @@ const lastMonths = (count) => {
 // Which side of the target mix a mutual fund counts towards
 const assetClassOfFund = (category = "") => {
   const name = category.toLowerCase();
-  if (/gold/.test(name)) return "gold";
-  if (/debt|liquid|bond|gilt|fixed/.test(name)) return "debt";
+  if (/gold|silver/.test(name)) return "gold";
+  if (/debt|liquid|bond|gilt|fixed|money market|overnight/.test(name)) return "debt";
   return "equity";
+};
+
+// Long-run yearly returns assumed for goal projections. Shown to the user.
+export const EXPECTED_RETURNS = { equity: 11, debt: 7, gold: 8 };
+
+const OTHER_LABELS = {
+  fd: "Fixed deposit",
+  rd: "Recurring deposit",
+  ppf: "PPF",
+  nps: "NPS",
+  sgb: "Sovereign gold bond",
+  bond: "Bond",
+  other: "Other",
 };
 
 const toNearest = (value) =>
@@ -106,6 +144,8 @@ const buildRebalance = (allocation, epfBalance, drift) => {
 const buildPortfolio = (doc, epf, cash, target) => {
   const stocks = doc?.portfolio?.stocks || [];
   const funds = doc?.portfolio?.mutual_funds || [];
+  const others = doc?.portfolio?.other || [];
+  const today = todayKey();
 
   const holdings = [
     ...stocks.map((stock) => ({
@@ -115,22 +155,66 @@ const buildPortfolio = (doc, epf, cash, target) => {
       symbol: stock.symbol,
       detail: stock.sector,
       assetClass: "equity",
+      split: { equity: 1, debt: 0, gold: 0 },
       quantity: stock.quantity,
+      price: stock.price || (stock.quantity ? stock.current_value / stock.quantity : null),
+      priceDate: stock.price_date || null,
+      priceSource: stock.price_source || "live",
       value: stock.current_value,
-      invested: stock.quantity * (stock.purchase_price || 0),
+      invested: stock.trades?.length
+        ? openCost(stock.trades)
+        : stock.quantity * (stock.purchase_price || 0),
+      purchaseDate: stock.purchase_date || null,
+      trades: stock.trades || [],
+      goalId: stock.goal_id || null,
     })),
     ...funds.map((fund) => ({
       id: fund._id.toString(),
       kind: "mutual_fund",
       name: fund.scheme_name,
       symbol: fund.scheme_code,
+      amfiCode: fund.amfi_code || null,
       detail: fund.category,
       assetClass: assetClassOfFund(fund.category),
+      split: { equity: 0, debt: 0, gold: 0, [assetClassOfFund(fund.category)]: 1 },
       quantity: fund.units,
+      price: fund.nav || null,
+      priceDate: fund.nav_date || null,
+      priceSource: fund.price_source || "live",
       value: fund.current_value,
-      invested: fund.invested_amount || 0,
+      invested: fund.trades?.length ? openCost(fund.trades) : fund.invested_amount || 0,
+      purchaseDate: fund.purchase_date || null,
+      trades: fund.trades || [],
+      sip: fund.sip?.active ? fund.sip : null,
+      goalId: fund.goal_id || null,
     })),
-  ].sort((a, b) => b.value - a.value);
+    ...others.map((item) => {
+      const split = otherInvestmentSplit(item);
+      const classes = Object.entries(split).filter(([, share]) => share > 0);
+      return {
+        id: item.id,
+        kind: "other",
+        otherKind: item.kind,
+        name: item.name || OTHER_LABELS[item.kind],
+        detail: [OTHER_LABELS[item.kind], item.institution].filter(Boolean).join(", "),
+        assetClass: classes.length === 1 ? classes[0][0] : "mixed",
+        split,
+        value: otherInvestmentValue(item, today),
+        invested: otherInvestmentCost(item, today),
+        rate: item.rate ?? null,
+        startDate: item.start_date || null,
+        maturityDate: item.maturity_date || null,
+        monthlyDeposit: item.monthly_deposit || 0,
+        priceSource: ["fd", "rd", "bond"].includes(item.kind) && item.rate ? "rate" : "manual",
+        purchaseDate: null,
+        trades: otherInvestmentTrades(item, today),
+        goalId: item.goal_id || null,
+        raw: item,
+      };
+    }),
+  ]
+    .map((item) => ({ ...item, xirr: holdingXirr(item, item.value, today) }))
+    .sort((a, b) => b.value - a.value);
 
   const value = holdings.reduce((sum, item) => sum + item.value, 0);
   const invested = holdings.reduce((sum, item) => sum + item.invested, 0);
@@ -140,19 +224,10 @@ const buildPortfolio = (doc, epf, cash, target) => {
   const gain = costedValue - invested;
 
   // EPF is long-term debt, so it counts towards the mix the user is aiming for
-  const amounts = {
-    equity: holdings
-      .filter((item) => item.assetClass === "equity")
-      .reduce((sum, item) => sum + item.value, 0),
-    debt:
-      holdings
-        .filter((item) => item.assetClass === "debt")
-        .reduce((sum, item) => sum + item.value, 0) +
-      (epf?.total_balance || 0),
-    gold: holdings
-      .filter((item) => item.assetClass === "gold")
-      .reduce((sum, item) => sum + item.value, 0),
-  };
+  const amounts = { equity: 0, debt: epf?.total_balance || 0, gold: 0 };
+  for (const item of holdings) {
+    for (const key of Object.keys(amounts)) amounts[key] += item.value * (item.split[key] || 0);
+  }
   const allocationTotal = amounts.equity + amounts.debt + amounts.gold;
 
   const allocation = [
@@ -180,11 +255,20 @@ const buildPortfolio = (doc, epf, cash, target) => {
     invested: round(invested),
     gain: round(gain),
     gainPercent: invested > 0 ? +percent(gain, invested).toFixed(1) : 0,
-    holdings: holdings.map((item) => ({
+    holdings: holdings.map(({ raw, trades, ...item }) => ({
       ...item,
+      // Trades can run to hundreds of rows, so only the count goes to the page
+      tradeCount: trades.length,
+      value: round(item.value),
+      invested: round(item.invested),
       gain: item.invested > 0 ? round(item.value - item.invested) : null,
       weight: +percent(item.value, value).toFixed(1),
+      raw: raw ? { ...raw, _id: undefined } : undefined,
     })),
+    returns: buildReturns(holdings, today),
+    sips: buildSips(funds, today),
+    pricesAsOf: latestPriceDate(holdings),
+    pricesRefreshedAt: doc?.portfolio?.prices_refreshed_at || null,
     allocation,
     drift,
     rebalance: target
@@ -193,6 +277,72 @@ const buildPortfolio = (doc, epf, cash, target) => {
     cashShare: Math.round(percent(cash, cash + allocationTotal)),
   };
 };
+
+// What's still held at cost, after sales took the oldest units first
+const openCost = (trades) => {
+  const lots = [];
+  for (const trade of [...trades].sort((a, b) => a.date.localeCompare(b.date))) {
+    if (trade.type === "buy") {
+      lots.push({ units: trade.units, cost: trade.amount });
+      continue;
+    }
+    let units = trade.units;
+    while (units > 1e-9 && lots.length) {
+      const lot = lots[0];
+      const used = Math.min(units, lot.units);
+      lot.cost -= (lot.cost * used) / lot.units;
+      lot.units -= used;
+      units -= used;
+      if (lot.units <= 1e-9) lots.shift();
+    }
+  }
+  return lots.reduce((sum, lot) => sum + lot.cost, 0);
+};
+
+const latestPriceDate = (holdings) =>
+  holdings
+    .filter((item) => item.priceSource === "live" && item.priceDate)
+    .reduce((latest, item) => (item.priceDate > latest ? item.priceDate : latest), "") || null;
+
+// Yearly return on everything with dated cash flows, against Nifty 50
+const buildReturns = (holdings, today) => {
+  const withFlows = holdings.filter((item) => holdingFlows(item).length);
+  const flows = withFlows.flatMap((item) => holdingFlows(item));
+  const value = withFlows.reduce((sum, item) => sum + item.value, 0);
+  if (!flows.length) {
+    return { xirr: null, coveredValue: 0, benchmark: null };
+  }
+
+  const history = peekHistory(BENCHMARK.symbol);
+  if (!history) {
+    // Loaded in the background; the next visit has the comparison
+    getHistory(BENCHMARK.symbol).catch((error) =>
+      console.warn("Benchmark history failed:", error.message),
+    );
+  }
+
+  return {
+    xirr: xirr([...flows, { date: today, amount: value }]),
+    coveredValue: round(value),
+    benchmark: history
+      ? { name: BENCHMARK.name, ...compareWithBenchmark(flows, value, history, today) }
+      : null,
+  };
+};
+
+const buildSips = (funds, today) =>
+  funds
+    .filter((fund) => fund.sip?.active && fund.sip.amount > 0 && fund.sip.day)
+    .map((fund) => ({
+      id: fund._id.toString(),
+      name: fund.scheme_name,
+      amount: fund.sip.amount,
+      day: fund.sip.day,
+      next: nextSipDate(fund.sip.day, today),
+      missed: missedSipDates(fund, today),
+      goalId: fund.goal_id || null,
+    }))
+    .sort((a, b) => a.next.localeCompare(b.next));
 
 const buildCashflow = (transactions) => {
   const months = lastMonths(CASHFLOW_MONTHS).map((month) => ({
@@ -305,32 +455,80 @@ const buildBudgets = (doc, transactions) =>
       };
     });
 
-// Savings can only be spent once, so the nearest goals claim them first
-const buildGoals = (goals, monthlySavings) => {
-  let available = monthlySavings;
+// The yearly return assumed for a goal: from the mix of what's linked to it,
+// or, with nothing linked, from how far away it is
+const goalRate = (linked, yearsLeft) => {
+  const total = linked.reduce((sum, item) => sum + item.value, 0);
+  if (total > 0) {
+    return linked.reduce(
+      (rate, item) =>
+        rate +
+        (item.value / total) *
+          Object.entries(item.split).reduce(
+            (sum, [key, share]) => sum + share * EXPECTED_RETURNS[key],
+            0,
+          ),
+      0,
+    );
+  }
+  if (yearsLeft >= 7) return 10;
+  if (yearsLeft >= 3) return 8;
+  return 6;
+};
+
+// Future value of today's amount plus a monthly saving, at a yearly rate
+const project = (current, monthly, ratePercent, months) => {
+  const rate = ratePercent / 100 / 12;
+  if (!rate) return current + monthly * months;
+  const growth = (1 + rate) ** months;
+  return current * growth + monthly * ((growth - 1) / rate);
+};
+
+// Savings can only be spent once, so the nearest goals claim them first.
+// A goal's progress is what's saved towards it plus anything linked to it.
+const buildGoals = (goals, monthlySavings, holdings, sips) => {
+  let available = Math.max(monthlySavings, 0);
 
   return goals.map((goal) => {
-    const remaining = Math.max(goal.target_amount - goal.saved_amount, 0);
+    const id = goal._id.toString();
+    const linked = holdings.filter((item) => item.goalId === id);
+    const linkedValue = linked.reduce((sum, item) => sum + item.value, 0);
+    const linkedMonthly =
+      sips.filter((sip) => sip.goalId === id).reduce((sum, sip) => sum + sip.amount, 0) +
+      linked
+        .filter((item) => item.otherKind === "rd")
+        .reduce((sum, item) => sum + (item.monthlyDeposit || 0), 0);
+
+    const current = goal.saved_amount + linkedValue;
     const monthsLeft = Math.max(
       (goal.target_date.getTime() - Date.now()) / (30.44 * 24 * 60 * 60 * 1000),
       1,
     );
-    const monthlyNeeded = round(remaining / monthsLeft);
-    const onTrack = remaining === 0 || available >= monthlyNeeded;
-    if (onTrack) available -= monthlyNeeded;
+    const rate = goalRate(linked, monthsLeft / 12);
+    const projected = project(current, linkedMonthly, rate, monthsLeft);
+    const shortfall = Math.max(goal.target_amount - projected, 0);
+    // The extra monthly saving that closes the gap at the same rate
+    const extraMonthly = shortfall > 0 ? round(shortfall / project(0, 1, rate, monthsLeft)) : 0;
+    const onTrack = shortfall === 0 || available >= extraMonthly;
+    if (shortfall > 0 && onTrack) available -= extraMonthly;
 
     return {
-      id: goal._id.toString(),
+      id,
       name: goal.name,
       target_amount: goal.target_amount,
       saved_amount: goal.saved_amount,
       target_date: goal.target_date,
-      progress: Math.min(
-        Math.round(percent(goal.saved_amount, goal.target_amount)),
-        100,
-      ),
-      monthlyNeeded,
+      current: round(current),
+      linkedValue: round(linkedValue),
+      linkedMonthly: round(linkedMonthly),
+      linked: linked.map((item) => ({ id: item.id, kind: item.kind, name: item.name, value: round(item.value) })),
+      progress: Math.min(Math.round(percent(current, goal.target_amount)), 100),
+      projected: round(projected),
+      rate: +rate.toFixed(1),
+      monthlyNeeded: round(linkedMonthly + extraMonthly),
+      extraMonthly,
       onTrack,
+      status: shortfall === 0 ? "on-track" : onTrack ? "covered-by-savings" : "behind",
     };
   });
 };
@@ -393,6 +591,7 @@ const buildInsights = ({
   liabilities,
   health,
   cashflow,
+  activity,
 }) => {
   const insights = [];
   const enabled = {
@@ -457,6 +656,22 @@ const buildInsights = ({
     }
   }
 
+  if (enabled.safety) {
+    for (const item of activity) {
+      insights.push({ ...item, id: `activity-${item.id}`, severity: "warning" });
+    }
+  }
+
+  for (const sip of portfolio.sips.filter((row) => row.missed.length)) {
+    insights.push({
+      id: `sip-missed-${sip.id}-${sip.missed.at(-1)}`,
+      severity: "warning",
+      title: `A SIP into ${sip.name} looks missed`,
+      body: `No purchase was found around ${sip.missed.join(", ")}. Check your bank balance on the SIP date.`,
+      href: "/portfolio",
+    });
+  }
+
   return insights;
 };
 
@@ -472,6 +687,13 @@ const recordSnapshot = async (userId, value) => {
 export const getOverview = async (user) => {
   const userId = user._id.toString();
 
+  // Sample data keeps its made-up values; everyone else gets today's prices
+  if (!user.hasSampleData) {
+    await refreshIfStale(userId).catch((error) =>
+      console.warn("Price refresh failed:", error.message),
+    );
+  }
+
   const [
     assetDoc,
     liabilityDoc,
@@ -481,6 +703,8 @@ export const getOverview = async (user) => {
     investmentDoc,
     budgetDoc,
     goalDocs,
+    policies,
+    bills,
   ] = await Promise.all([
     Asset.findOne({ user_id: userId }).lean(),
     Liability.findOne({ user_id: userId }).lean(),
@@ -490,6 +714,8 @@ export const getOverview = async (user) => {
     Investment.findOne({ user_id: userId }).lean(),
     Budget.findOne({ user_id: userId }).lean(),
     Goal.find({ user_id: userId }).sort({ target_date: 1 }).lean(),
+    Insurance.find({ user_id: userId }).sort({ created_at: 1 }).lean(),
+    Bill.find({ user_id: userId }).sort({ due_day: 1 }).lean(),
   ]);
 
   const transactions = transactionDoc?.transactions || [];
@@ -532,7 +758,21 @@ export const getOverview = async (user) => {
   );
   const cashflow = buildCashflow(transactions);
   const budgets = buildBudgets(budgetDoc, transactions);
-  const goals = buildGoals(goalDocs, cashflow.forecast.monthlySavings);
+  const goals = buildGoals(
+    goalDocs,
+    cashflow.forecast.monthlySavings,
+    portfolio.holdings,
+    portfolio.sips,
+  );
+  const recurring = findRecurring(transactions);
+  const activity = findUnusualActivity(transactions, recurring);
+  const upcoming = buildUpcoming({
+    bills,
+    debts,
+    funds: investmentDoc?.portfolio?.mutual_funds || [],
+    policies,
+    recurring,
+  });
   const health = buildHealth({
     cash,
     cashflow,
@@ -588,6 +828,12 @@ export const getOverview = async (user) => {
     budgets,
     goals,
     health,
+    insurance: policies,
+    bills,
+    recurring,
+    upcoming,
+    activity,
+    expectedReturns: EXPECTED_RETURNS,
     insights: buildInsights({
       preferences: user.preferences,
       budgets,
@@ -595,6 +841,7 @@ export const getOverview = async (user) => {
       liabilities,
       health,
       cashflow,
+      activity,
     }),
     recentTransactions: [...transactions]
       .sort((a, b) => b.date.localeCompare(a.date))

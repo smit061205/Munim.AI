@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, Info } from "lucide-react";
+import { AlertTriangle, Info, MessageCircle, Sparkles } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
+import { useAssistant } from "../context/AssistantContext";
 import { api } from "../lib/api";
-import { formatDate, formatMoney } from "../lib/format";
+import { formatDate, formatDayMonth, formatMoney } from "../lib/format";
 import Loaded from "../components/Loaded";
 import {
   AllocationCompare,
@@ -27,6 +28,79 @@ const CardLink = ({ to, children }) => (
     {children}
   </Link>
 );
+
+// Opens the assistant with a question about the figure next to it
+const AskButton = ({ question }) => {
+  const { ask } = useAssistant();
+  return (
+    <button
+      onClick={() => ask(question)}
+      className="no-print inline-flex items-center gap-1 text-sm text-muted hover:text-ink transition-colors"
+    >
+      <MessageCircle size={14} /> Ask about this
+    </button>
+  );
+};
+
+const WeeklyNote = () => {
+  const [note, setNote] = useState(undefined);
+
+  useEffect(() => {
+    api("/notifications/weekly-note")
+      .then(({ data }) => setNote(data))
+      .catch(() => setNote(null));
+  }, []);
+
+  if (note === null) return null;
+  return (
+    <Card className="p-5">
+      <div className="flex items-start gap-3">
+        <Sparkles size={18} className="text-accent shrink-0 mt-1" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm text-muted mb-1">Your week, written by Munimji</p>
+          {note === undefined ? (
+            <p className="text-muted animate-pulse">Looking over your week...</p>
+          ) : (
+            <>
+              <p className="font-display text-lg leading-snug">{note.text}</p>
+              <div className="mt-2">
+                <AskButton question={`About this week's note: "${note.text}" What should I do first?`} />
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+};
+
+const UPCOMING_KIND = { bill: "Bill", emi: "EMI", sip: "SIP", insurance: "Premium", subscription: "Subscription" };
+
+const ComingUp = ({ upcoming }) => {
+  const soon = upcoming.slice(0, 6);
+  return (
+    <Card className="p-5">
+      <SectionTitle title="Coming up">
+        <CardLink to="/cash-flow?tab=upcoming">View calendar</CardLink>
+      </SectionTitle>
+      {soon.length ? (
+        <ul className="divide-y divide-line">
+          {soon.map((item) => (
+            <li key={item.id} className="flex justify-between gap-4 py-2.5">
+              <div className="min-w-0">
+                <p className="truncate">{item.name}</p>
+                <p className="text-sm text-muted">{formatDayMonth(item.date)}, {UPCOMING_KIND[item.kind]}</p>
+              </div>
+              <p className="tnum shrink-0">{item.amount ? formatMoney(item.amount) : ""}</p>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-muted">Nothing due in the next five weeks.</p>
+      )}
+    </Card>
+  );
+};
 
 const FIRST_STEPS = [
   {
@@ -186,9 +260,14 @@ export default function HomePage() {
                   )}
                 </p>
                 <NetWorthChart history={data.netWorth.history} />
+                <div className="mt-3">
+                  <AskButton question="Explain how my net worth has changed and what's driving it." />
+                </div>
               </Card>
               <HealthCard health={data.health} />
             </div>
+
+            <WeeklyNote />
 
             <Insights insights={data.insights} />
 
@@ -198,6 +277,9 @@ export default function HomePage() {
                   <CardLink to="/portfolio">View portfolio</CardLink>
                 </SectionTitle>
                 <AllocationCompare allocation={data.portfolio.allocation} />
+                <div className="mt-3">
+                  <AskButton question="How is my portfolio doing against my target mix and the Nifty 50?" />
+                </div>
               </Card>
               <Card className="p-5">
                 <SectionTitle
@@ -207,7 +289,12 @@ export default function HomePage() {
                   <CardLink to="/cash-flow">View cash flow</CardLink>
                 </SectionTitle>
                 {data.spending.length ? (
-                  <SpendingBars rows={data.spending} />
+                  <>
+                    <SpendingBars rows={data.spending} />
+                    <div className="mt-3">
+                      <AskButton question="Where can I cut my spending? Look at my last three months." />
+                    </div>
+                  </>
                 ) : (
                   <p className="text-muted">No spending in the last 90 days.</p>
                 )}
@@ -219,7 +306,8 @@ export default function HomePage() {
               <CashFlowChart months={data.cashflow.months} />
             </Card>
 
-            <div className="grid @3xl:grid-cols-2 gap-6">
+            <div className="grid @3xl:grid-cols-3 gap-6">
+              <ComingUp upcoming={data.upcoming} />
               <Card className="p-5">
                 <SectionTitle title="Recent transactions">
                   <CardLink to="/cash-flow">View all</CardLink>
@@ -266,7 +354,7 @@ export default function HomePage() {
                         <div className="flex justify-between gap-4 text-sm mb-1">
                           <span>{goal.name}</span>
                           <span className="text-muted tnum">
-                            <Money value={goal.saved_amount} /> of{" "}
+                            <Money value={goal.current} /> of{" "}
                             <Money value={goal.target_amount} />
                           </span>
                         </div>

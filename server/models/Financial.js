@@ -63,6 +63,7 @@ const liabilityItemSchema = new mongoose.Schema({
   monthly_payment: { type: Number, default: 0 },
   interest_rate: Number,
   loan_term_months: Number,
+  due_day: { type: Number, min: 1, max: 31 },
   created_at: { type: Date, default: Date.now },
 });
 
@@ -81,6 +82,8 @@ const transactionItemSchema = new mongoose.Schema({
   amount: { type: Number, required: true },
   type: { type: String, enum: ["income", "expense"], required: true },
   category: { type: String, required: true },
+  // Who chose the category, so a person's choice is never overwritten
+  category_source: { type: String, enum: ["user", "rule", "ai", "import"] },
   description: String,
   account: String,
   created_at: { type: Date, default: Date.now },
@@ -125,26 +128,90 @@ const creditScoreSchema = new mongoose.Schema({
   updated_at: { type: Date, default: Date.now },
 });
 
+// One buy or sell of a holding. Amount is what changed hands, always positive.
+// These give real returns (XIRR) and the lots for capital gains.
+const holdingTradeSchema = new mongoose.Schema(
+  {
+    date: { type: String, required: true }, // yyyy-mm-dd
+    type: { type: String, enum: ["buy", "sell"], required: true },
+    units: { type: Number, required: true },
+    amount: { type: Number, required: true },
+  },
+  { _id: false },
+);
+
+// A monthly SIP into a fund
+const sipSchema = new mongoose.Schema(
+  {
+    amount: { type: Number, default: 0 },
+    day: { type: Number, min: 1, max: 28 },
+    start_date: String,
+    active: { type: Boolean, default: true },
+  },
+  { _id: false },
+);
+
 // Stock Schema
 const stockSchema = new mongoose.Schema({
   symbol: String,
   company_name: String,
+  isin: String,
   quantity: { type: Number, default: 0 },
   current_value: { type: Number, default: 0 },
   purchase_price: Number,
+  purchase_date: String,
   sector: String,
+  price: Number,
+  price_date: String,
+  // "live" when the value follows the market, "manual" when the user sets it
+  price_source: { type: String, enum: ["live", "manual", "sample"], default: "live" },
+  trades: [holdingTradeSchema],
+  goal_id: String,
   created_at: { type: Date, default: Date.now },
 });
 
 // Mutual Fund Schema
 const mutualFundSchema = new mongoose.Schema({
   scheme_name: String,
+  // The ISIN for imported funds; AMFI's code is kept separately
   scheme_code: String,
+  amfi_code: String,
   units: { type: Number, default: 0 },
   current_value: { type: Number, default: 0 },
   nav: Number,
+  nav_date: String,
+  price_source: { type: String, enum: ["live", "manual", "sample"], default: "live" },
   category: String,
   invested_amount: { type: Number, default: 0 },
+  purchase_date: String,
+  trades: [holdingTradeSchema],
+  sip: sipSchema,
+  goal_id: String,
+  created_at: { type: Date, default: Date.now },
+});
+
+// Deposits, small savings and other holdings that aren't traded daily
+const otherInvestmentSchema = new mongoose.Schema({
+  id: String,
+  kind: {
+    type: String,
+    enum: ["fd", "rd", "ppf", "nps", "sgb", "bond", "other"],
+    required: true,
+  },
+  name: String,
+  institution: String,
+  // Lump sum for an FD or bond, the opening amount for the rest
+  principal: { type: Number, default: 0 },
+  monthly_deposit: { type: Number, default: 0 },
+  rate: Number,
+  start_date: String,
+  maturity_date: String,
+  // Set by the user for PPF, NPS, gold bonds and "other"
+  current_value: { type: Number, default: 0 },
+  // Share of an NPS account in equity; the rest counts as debt
+  equity_share: { type: Number, min: 0, max: 100 },
+  grams: Number,
+  goal_id: String,
   created_at: { type: Date, default: Date.now },
 });
 
@@ -153,6 +220,8 @@ const portfolioSchema = new mongoose.Schema({
   total_value: { type: Number, default: 0 },
   stocks: [stockSchema],
   mutual_funds: [mutualFundSchema],
+  other: [otherInvestmentSchema],
+  prices_refreshed_at: Date,
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now },
 });

@@ -2,7 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowLeftRight,
+  Bell,
   Calculator,
+  Eye,
+  EyeOff,
+  Moon,
+  Sun,
   Goal,
   Home,
   Landmark,
@@ -14,6 +19,7 @@ import {
   Search,
   Settings,
   FileText,
+  Receipt,
   X,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
@@ -21,6 +27,137 @@ import { DataProvider } from "../context/DataContext";
 import { AssistantProvider, useAssistant } from "../context/AssistantContext";
 import AssistantChat from "./AssistantChat";
 import { IconButton } from "./ui";
+import { api } from "../lib/api";
+import { getPrivacy, getTheme, setPrivacy, setTheme } from "../lib/display";
+
+const timeAgo = (date) => {
+  const minutes = Math.round((Date.now() - new Date(date)) / 60000);
+  if (minutes < 60) return minutes <= 1 ? "just now" : `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  const days = Math.round(hours / 24);
+  return `${days} ${days === 1 ? "day" : "days"} ago`;
+};
+
+const NotificationsBell = () => {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState([]);
+  const [unread, setUnread] = useState(0);
+  const wrapper = useRef(null);
+
+  const load = async () => {
+    try {
+      const result = await api("/notifications");
+      setItems(result.data);
+      setUnread(result.unread);
+    } catch {
+      // The bell just stays quiet
+    }
+  };
+
+  useEffect(() => {
+    load();
+    const timer = setInterval(load, 15 * 60 * 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (event) => {
+      if (!wrapper.current?.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  const markAll = async () => {
+    setItems((current) => current.map((item) => ({ ...item, read: true })));
+    setUnread(0);
+    await api("/notifications/all/read", { method: "POST" }).catch(() => {});
+  };
+
+  const openItem = async (item) => {
+    setOpen(false);
+    if (!item.read) {
+      setItems((current) => current.map((row) => (row.id === item.id ? { ...row, read: true } : row)));
+      setUnread((count) => Math.max(count - 1, 0));
+      api(`/notifications/${item.id}/read`, { method: "POST" }).catch(() => {});
+    }
+    if (item.href) navigate(item.href);
+  };
+
+  return (
+    <div ref={wrapper} className="relative">
+      <IconButton label={unread ? `Notifications, ${unread} unread` : "Notifications"} aria-expanded={open} onClick={() => setOpen(!open)} className="relative">
+        <Bell size={18} />
+        {unread > 0 && (
+          <span className="absolute top-1 right-1 min-w-4 h-4 px-1 rounded-full bg-loss text-white text-[10px] leading-4 text-center tnum">
+            {unread > 9 ? "9+" : unread}
+          </span>
+        )}
+      </IconButton>
+      {open && (
+        <div className="absolute right-0 z-40 mt-2 w-[min(22rem,calc(100vw-32px))] bg-surface border border-line rounded-lg">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-line">
+            <p className="font-medium">Notifications</p>
+            {unread > 0 && (
+              <button onClick={markAll} className="text-sm text-muted hover:text-ink">Mark all read</button>
+            )}
+          </div>
+          {items.length === 0 ? (
+            <p className="px-3 py-6 text-sm text-muted text-center">Reminders about bills, budgets and unusual spending show up here.</p>
+          ) : (
+            <ul className="max-h-96 overflow-y-auto divide-y divide-line">
+              {items.map((item) => (
+                <li key={item.id}>
+                  <button onClick={() => openItem(item)} className="w-full text-left px-3 py-2.5 hover:bg-wash flex gap-2">
+                    <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${item.read ? "bg-transparent" : "bg-accent"}`} aria-hidden="true" />
+                    <span className="min-w-0">
+                      <span className={`block text-sm ${item.read ? "" : "font-medium"}`}>{item.title}</span>
+                      {item.body && <span className="block text-sm text-muted">{item.body}</span>}
+                      <span className="block text-xs text-faint mt-0.5">{timeAgo(item.created_at)}</span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const DisplayToggles = () => {
+  const [theme, setThemeState] = useState(getTheme);
+  const [privacy, setPrivacyState] = useState(getPrivacy);
+
+  return (
+    <>
+      <IconButton
+        label={privacy ? "Show amounts" : "Hide amounts"}
+        aria-pressed={privacy}
+        onClick={() => {
+          setPrivacy(!privacy);
+          setPrivacyState(!privacy);
+        }}
+      >
+        {privacy ? <EyeOff size={18} /> : <Eye size={18} />}
+      </IconButton>
+      <IconButton
+        label={theme === "dark" ? "Light mode" : "Dark mode"}
+        onClick={() => {
+          const next = theme === "dark" ? "light" : "dark";
+          setTheme(next);
+          setThemeState(next);
+        }}
+      >
+        {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+      </IconButton>
+    </>
+  );
+};
 
 const NAV = [
   { to: "/home", label: "Home", icon: Home },
@@ -28,6 +165,7 @@ const NAV = [
   { to: "/cash-flow", label: "Cash flow", icon: ArrowLeftRight },
   { to: "/accounts", label: "Accounts", icon: Landmark },
   { to: "/goals", label: "Goals", icon: Goal },
+  { to: "/tax", label: "Tax", icon: Receipt },
   { to: "/calculators", label: "Calculators", icon: Calculator },
   { to: "/reports", label: "Reports", icon: FileText },
 ];
@@ -284,6 +422,8 @@ const TopBar = () => {
       </Link>
       <SearchBox key={pathname} />
       <div className="flex items-center gap-1 shrink-0">
+        <DisplayToggles />
+        <NotificationsBell />
         <Link
           to="/settings"
           aria-label="Settings"

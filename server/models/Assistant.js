@@ -24,6 +24,27 @@ const messageSchema = new mongoose.Schema({
   },
   model: String,
   tokens: { prompt: Number, completion: Number },
+  // Changes the assistant proposed; nothing happens until the user confirms
+  actions: [
+    {
+      id: String,
+      kind: String,
+      summary: String,
+      params: mongoose.Schema.Types.Mixed,
+      status: {
+        type: String,
+        enum: ["pending", "done", "dismissed", "failed"],
+        default: "pending",
+      },
+      result: String,
+    },
+  ],
+  // Small charts drawn under the answer, from the data a tool returned
+  charts: [mongoose.Schema.Types.Mixed],
+  followUps: [String],
+  // Short labels for what the assistant looked up, e.g. "Searched transactions"
+  steps: [String],
+  feedback: { type: String, enum: ["up", "down"] },
   created_at: { type: Date, default: Date.now },
 });
 
@@ -36,8 +57,16 @@ const aiUsageSchema = new mongoose.Schema({
 });
 aiUsageSchema.index({ user_id: 1, key: 1 }, { unique: true });
 
+// Facts the user asked the assistant to remember across conversations
+const memorySchema = new mongoose.Schema({
+  user_id: { type: String, required: true, index: true },
+  text: { type: String, required: true },
+  created_at: { type: Date, default: Date.now },
+});
+
 const Conversation = mongoose.model("Conversation", conversationSchema);
 const Message = mongoose.model("Message", messageSchema);
 const AiUsage = mongoose.model("AiUsage", aiUsageSchema);
+const Memory = mongoose.model("Memory", memorySchema);
 
-export { Conversation, Message, AiUsage };
+export { Conversation, Message, AiUsage, Memory };

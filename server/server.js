@@ -16,7 +16,10 @@ import permissionRoutes from "./routes/permissions.js";
 import assistantRoutes from "./routes/assistant.js";
 import wealthRoutes from "./routes/wealth.js";
 import ingestRoutes from "./routes/ingest.js";
+import taxRoutes from "./routes/tax.js";
+import notificationRoutes from "./routes/notifications.js";
 import { startKeepAlive } from "./services/keepAlive.js";
+import { startScheduler } from "./services/notificationService.js";
 
 // Import middleware
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -104,6 +107,8 @@ app.use("/api/transactions", requireAuth, transactionRoutes);
 app.use("/api/permissions", requireAuth, permissionRoutes);
 app.use("/api/assistant", requireAuth, assistantRoutes);
 app.use("/api/wealth", requireAuth, wealthRoutes);
+app.use("/api/tax", requireAuth, taxRoutes);
+app.use("/api/notifications", requireAuth, notificationRoutes);
 app.use("/api/ingest", requireAuth, upload.any(), ingestRoutes);
 
 // Error handling middleware
@@ -118,6 +123,9 @@ app.use("*", (req, res) => {
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+
+  // Daily reminders, price refreshes and the Monday digest
+  startScheduler();
 
   // Prevent Render's 15-minute sleep timer
   if (process.env.NODE_ENV === "production" || process.env.PING_URL) {

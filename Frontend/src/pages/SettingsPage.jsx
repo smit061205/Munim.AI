@@ -25,6 +25,7 @@ const SECTIONS = [
   { value: "investor", label: "Investor profile" },
   { value: "privacy", label: "Data and privacy" },
   { value: "preferences", label: "Preferences" },
+  { value: "assistant", label: "Assistant" },
   { value: "security", label: "Security" },
 ];
 
@@ -242,7 +243,7 @@ const PreferencesSection = () => {
   const { user, updateProfile } = useAuth();
   const { refresh } = useData();
   const toast = useToast();
-  const { dateFormat, insights } = user.preferences;
+  const { dateFormat, insights, weeklyDigest } = user.preferences;
 
   const save = async (preferences) => {
     try {
@@ -270,6 +271,15 @@ const PreferencesSection = () => {
         </Field>
       </Card>
       <Card className="p-5">
+        <SectionTitle title="Email" />
+        <Toggle
+          label="Weekly summary"
+          description="Monday morning: net worth, last week's spending, what's due and a short note."
+          checked={weeklyDigest !== false}
+          onChange={(value) => save({ weeklyDigest: value })}
+        />
+      </Card>
+      <Card className="p-5">
         <SectionTitle title="Insights on Home" description="Choose what Munim.AI points out to you." />
         <div className="divide-y divide-line">
           {INSIGHTS.map((item) => (
@@ -282,6 +292,71 @@ const PreferencesSection = () => {
             />
           ))}
         </div>
+      </Card>
+    </div>
+  );
+};
+
+const AssistantSection = () => {
+  const { user, updateProfile } = useAuth();
+  const toast = useToast();
+  const [memories, setMemories] = useState(null);
+
+  const load = useCallback(async () => {
+    const { data } = await api("/assistant/memory");
+    setMemories(data);
+  }, []);
+
+  useEffect(() => {
+    load().catch(() => setMemories([]));
+  }, [load]);
+
+  const forget = async (id) => {
+    await api(`/assistant/memory/${id}`, { method: "DELETE" });
+    await load();
+    toast.success(id === "all" ? "Memory cleared" : "Forgotten");
+  };
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <Card className="p-5">
+        <SectionTitle title="Language" description="How Munimji replies." />
+        <Select
+          className="sm:max-w-64"
+          aria-label="Reply language"
+          value={user.preferences?.assistantLanguage || "auto"}
+          onChange={async (event) => {
+            try {
+              await updateProfile({ preferences: { assistantLanguage: event.target.value } });
+            } catch (error) {
+              toast.error(error.message);
+            }
+          }}
+        >
+          <option value="auto">Match how I write</option>
+          <option value="en">English</option>
+          <option value="hi">Hindi</option>
+          <option value="hinglish">Hinglish</option>
+        </Select>
+      </Card>
+      <Card className="p-5">
+        <SectionTitle title="Memory" description='Things you asked Munimji to remember, used in every conversation. Say "remember that..." in a chat to add one.'>
+          {memories?.length > 0 && (
+            <Button size="sm" variant="secondary" onClick={() => forget("all")}>Forget all</Button>
+          )}
+        </SectionTitle>
+        {memories === null ? null : memories.length === 0 ? (
+          <p className="text-muted">Nothing saved yet.</p>
+        ) : (
+          <ul className="divide-y divide-line border-t border-line">
+            {memories.map((memory) => (
+              <li key={memory._id} className="flex items-center justify-between gap-4 py-2">
+                <span>{memory.text}</span>
+                <Button size="sm" variant="ghost" onClick={() => forget(memory._id)}>Forget</Button>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
     </div>
   );
@@ -371,6 +446,7 @@ const CONTENT = {
   investor: InvestorSection,
   privacy: PrivacySection,
   preferences: PreferencesSection,
+  assistant: AssistantSection,
   security: SecuritySection,
 };
 

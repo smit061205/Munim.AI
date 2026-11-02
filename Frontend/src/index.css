@@ -37,6 +37,40 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+/* Dark mode: the same tokens, stepped for a dark surface */
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --color-canvas: #0f141c;
+  --color-surface: #161c26;
+  --color-wash: #1e2531;
+  --color-line: #273040;
+  --color-line-strong: #36404f;
+  --color-ink: #e7eaef;
+  --color-muted: #9ba4b1;
+  --color-faint: #7c8592;
+
+  --color-accent: #b9c8e8;
+  --color-accent-hover: #d0dbf1;
+  --color-accent-soft: #1f2a3e;
+
+  --color-gain: #4cc38a;
+  --color-gain-soft: #12261d;
+  --color-loss: #f07a6c;
+  --color-loss-soft: #2d1816;
+  --color-warn: #e2b24c;
+  --color-warn-soft: #2a2213;
+}
+
+/* Privacy mode hides amounts, e.g. when sharing a screen */
+html.privacy .tnum,
+html.privacy .recharts-cartesian-axis-tick-value,
+html.privacy .recharts-tooltip-wrapper {
+  filter: blur(7px);
+}
+html.privacy .tnum:hover {
+  filter: none;
+}
+
 body {
   margin: 0;
   background-color: var(--color-canvas);

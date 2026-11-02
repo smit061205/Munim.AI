@@ -8,6 +8,12 @@ import {
   deleteInvestment,
   importStatement,
   previewStatement,
+  addOtherInvestment,
+  updateOtherInvestment,
+  removeOtherInvestment,
+  refreshInvestmentPrices,
+  searchFunds,
+  quote,
 } from "../controllers/investmentController.js";
 import { requireAuth } from "../middleware/auth.js";
 import { ApiError } from "../middleware/errorHandler.js";
@@ -53,6 +59,16 @@ const statementLimiter = rateLimit({
 // Statement import. These come before the /:type routes.
 router.post("/statement/preview", statementLimiter, acceptStatement, previewStatement);
 router.post("/statement/import", importStatement);
+
+// Deposits, PPF, NPS, gold bonds and other holdings
+router.post("/other", addOtherInvestment);
+router.put("/other/:id", updateOtherInvestment);
+router.delete("/other/:id", removeOtherInvestment);
+
+// Market data
+router.post("/refresh-prices", refreshInvestmentPrices);
+router.get("/funds/search", searchFunds);
+router.get("/quote", quote);
 
 // GET /api/investment - Get all investments for user
 router.get("/", getInvestments);

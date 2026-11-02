@@ -21,12 +21,13 @@ import {
   formatMonthShort,
 } from "../../lib/format";
 
+// Theme tokens, so charts follow dark mode
 const COLORS = {
-  ink: "#0F1B2D",
-  muted: "#5B6675",
-  line: "#E8E8E4",
-  accent: "#1B2B4B",
-  surface: "#FFFFFF",
+  ink: "var(--color-ink)",
+  muted: "var(--color-muted)",
+  line: "var(--color-line)",
+  accent: "var(--color-accent)",
+  surface: "var(--color-surface)",
 };
 
 // Fixed order: a hue always follows its entity, never its rank

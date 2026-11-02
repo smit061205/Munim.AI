@@ -3,6 +3,7 @@ import User from "../models/User.js";
 import { ApiError } from "../middleware/errorHandler.js";
 import { signToken } from "../middleware/auth.js";
 import UserPermissions from "../models/UserPermissions.js";
+import { AiNote, Notification, TaxProfile } from "../models/Planning.js";
 import {
   clearFinancialData,
   hasFinancialData,
@@ -247,6 +248,12 @@ export const updateCurrentUser = async (req, res, next) => {
         user.preferences.insights[key] = preferences.insights[key];
       }
     }
+    for (const key of ["weeklyDigest", "checklistHidden"]) {
+      if (typeof preferences?.[key] === "boolean") user.preferences[key] = preferences[key];
+    }
+    if (["auto", "en", "hi", "hinglish"].includes(preferences?.assistantLanguage)) {
+      user.preferences.assistantLanguage = preferences.assistantLanguage;
+    }
 
     await user.save();
     res.json({ success: true, user: toPublicUser(user) });
@@ -312,6 +319,9 @@ export const deleteAccount = async (req, res, next) => {
       clearFinancialData(userId),
       clearAssistantData(userId),
       UserPermissions.deleteOne({ user_id: userId }),
+      Notification.deleteMany({ user_id: userId }),
+      AiNote.deleteMany({ user_id: userId }),
+      TaxProfile.deleteMany({ user_id: userId }),
     ]);
     await user.deleteOne();
     res.json({ success: true });

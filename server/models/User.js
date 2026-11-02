@@ -35,6 +35,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     select: false
   },
+  emailVerified: {
+    type: Boolean,
+    default: false
+  },
   firstName: {
     type: String,
     required: true
@@ -59,8 +63,18 @@ const userSchema = new mongoose.Schema({
       budgets: { type: Boolean, default: true },
       allocation: { type: Boolean, default: true },
       safety: { type: Boolean, default: true }
-    }
+    },
+    // Weekly summary by email, sent on Monday mornings
+    weeklyDigest: { type: Boolean, default: true },
+    // "auto" answers in the language the user writes in
+    assistantLanguage: {
+      type: String,
+      enum: ["auto", "en", "hi", "hinglish"],
+      default: "auto"
+    },
+    checklistHidden: { type: Boolean, default: false }
   },
+  digestSentWeek: String,
   hasSampleData: {
     type: Boolean,
     default: false

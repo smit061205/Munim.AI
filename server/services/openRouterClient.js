@@ -18,7 +18,16 @@ export class ProviderError extends Error {
   }
 }
 
-const postCompletion = async ({ model, messages, maxTokens, signal, stream }) => {
+const postCompletion = async ({
+  model,
+  messages,
+  maxTokens,
+  signal,
+  stream,
+  tools,
+  json,
+  temperature = 0.4,
+}) => {
   const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
 
   const response = await fetch(`${baseUrl()}/chat/completions`, {
@@ -33,8 +42,11 @@ const postCompletion = async ({ model, messages, maxTokens, signal, stream }) =>
       model,
       messages,
       max_tokens: maxTokens,
-      temperature: 0.4,
+      temperature,
       stream,
+      ...(stream ? { stream_options: { include_usage: true } } : {}),
+      ...(tools?.length ? { tools, tool_choice: "auto" } : {}),
+      ...(json ? { response_format: { type: "json_object" } } : {}),
     }),
     signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
   });
@@ -49,18 +61,35 @@ const postCompletion = async ({ model, messages, maxTokens, signal, stream }) =>
   return response;
 };
 
-// Yields { text } for each token and finally { usage }
-async function* streamModel({ model, messages, maxTokens, signal }) {
+// Yields { text } for each token, { toolCalls } once the model has finished
+// asking for tools, and finally { usage }
+async function* streamModel({ model, messages, maxTokens, signal, tools }) {
   const response = await postCompletion({
     model,
     messages,
     maxTokens,
     signal,
     stream: true,
+    tools,
   });
 
   const decoder = new TextDecoder();
   let buffer = "";
+  // Tool calls arrive in pieces, keyed by their position in the list
+  const calls = [];
+
+  const finishCalls = function* () {
+    if (calls.length) {
+      yield {
+        toolCalls: calls.filter(Boolean).map((call, index) => ({
+          id: call.id || `call_${index}`,
+          type: "function",
+          function: { name: call.name, arguments: call.arguments || "{}" },
+        })),
+      };
+      calls.length = 0;
+    }
+  };
 
   for await (const chunk of response.body) {
     buffer += decoder.decode(chunk, { stream: true });
@@ -73,7 +102,10 @@ async function* streamModel({ model, messages, maxTokens, signal }) {
       // Blank lines and ": OPENROUTER PROCESSING" keep-alives carry no data
       if (!line.startsWith("data: ")) continue;
       const payload = line.slice(6);
-      if (payload === "[DONE]") return;
+      if (payload === "[DONE]") {
+        yield* finishCalls();
+        return;
+      }
 
       let event;
       try {
@@ -89,16 +121,24 @@ async function* streamModel({ model, messages, maxTokens, signal }) {
         );
       }
 
-      const text = event.choices?.[0]?.delta?.content;
-      if (text) yield { text };
+      const delta = event.choices?.[0]?.delta;
+      if (delta?.content) yield { text: delta.content };
+      for (const piece of delta?.tool_calls || []) {
+        const index = piece.index ?? calls.length;
+        const call = calls[index] || (calls[index] = { arguments: "" });
+        if (piece.id) call.id = piece.id;
+        if (piece.function?.name) call.name = piece.function.name;
+        if (piece.function?.arguments) call.arguments += piece.function.arguments;
+      }
       if (event.usage) yield { usage: event.usage };
     }
   }
+  yield* finishCalls();
 }
 
 // Streams from the primary model, moving to the fallback only if nothing has
 // reached the user yet
-export async function* streamChat({ messages, maxTokens, signal }) {
+export async function* streamChat({ messages, maxTokens, signal, tools }) {
   const { primary, fallback } = getModels();
 
   for (const model of [primary, fallback]) {
@@ -110,8 +150,9 @@ export async function* streamChat({ messages, maxTokens, signal }) {
         messages,
         maxTokens,
         signal,
+        tools,
       })) {
-        if (part.text) started = true;
+        if (part.text || part.toolCalls) started = true;
         yield part;
       }
       return;
@@ -122,17 +163,45 @@ export async function* streamChat({ messages, maxTokens, signal }) {
   }
 }
 
-// One-shot completion for background work such as summarising
-export const completeChat = async ({ messages, maxTokens }) => {
-  const response = await postCompletion({
-    model: getModels().primary,
+// One-shot completion for background work such as summarising, with the same
+// fallback model as the chat
+export const completeChat = async ({ messages, maxTokens, json = false, temperature }) => {
+  const { primary, fallback } = getModels();
+  for (const model of [primary, fallback]) {
+    try {
+      const response = await postCompletion({
+        model,
+        messages,
+        maxTokens,
+        stream: false,
+        json,
+        temperature,
+      });
+      const data = await response.json();
+      return {
+        text: data.choices?.[0]?.message?.content || "",
+        usage: data.usage,
+      };
+    } catch (error) {
+      if (model === fallback) throw error;
+      console.warn(`Model ${model} failed, trying fallback:`, error.message);
+    }
+  }
+};
+
+// A completion that must come back as JSON. Models sometimes wrap it in a
+// code fence, so that's removed before parsing.
+export const completeJson = async ({ messages, maxTokens = 2000 }) => {
+  const { text, usage } = await completeChat({
     messages,
     maxTokens,
-    stream: false,
+    json: true,
+    temperature: 0,
   });
-  const data = await response.json();
-  return {
-    text: data.choices?.[0]?.message?.content || "",
-    usage: data.usage,
-  };
+  const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
+  try {
+    return { data: JSON.parse(cleaned), usage };
+  } catch {
+    throw new ProviderError("The model didn't return valid JSON", 502);
+  }
 };

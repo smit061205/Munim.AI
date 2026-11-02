@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { api } from "../lib/api";
@@ -19,7 +20,13 @@ import {
   useToast,
 } from "../components/ui";
 
-const GoalModal = ({ goal, onClose }) => {
+const STATUS = {
+  "on-track": { tone: "gain", label: "On track" },
+  "covered-by-savings": { tone: "accent", label: "Needs a top-up" },
+  behind: { tone: "warn", label: "Behind" },
+};
+
+const GoalModal =({ goal, onClose }) => {
   const { refresh } = useData();
   const toast = useToast();
   const [form, setForm] = useState({
@@ -109,9 +116,7 @@ export default function GoalsPage() {
                       <p className="text-sm text-muted">By {formatDayMonth(goal.target_date)}</p>
                     </div>
                     <div className="flex items-center gap-1">
-                      <Badge tone={goal.onTrack ? "gain" : "warn"}>
-                        {goal.onTrack ? "On track" : "Behind"}
-                      </Badge>
+                      <Badge tone={STATUS[goal.status].tone}>{STATUS[goal.status].label}</Badge>
                       <IconButton label={`Edit ${goal.name}`} onClick={() => setEditing(goal)}>
                         <Pencil size={15} />
                       </IconButton>
@@ -121,15 +126,27 @@ export default function GoalsPage() {
                     </div>
                   </div>
                   <p className="text-2xl font-semibold tnum tracking-tight mt-4">
-                    {formatMoney(goal.saved_amount)}
+                    {formatMoney(goal.current)}
                     <span className="text-base font-normal text-muted"> of {formatMoney(goal.target_amount)}</span>
                   </p>
                   <div className="mt-3 mb-3">
-                    <Progress value={goal.progress} label={`${goal.name} progress`} />
+                    <Progress value={goal.progress} tone={goal.status === "behind" ? "loss" : "accent"} label={`${goal.name} progress`} />
                   </div>
-                  <p className="text-sm text-muted tnum">
-                    {formatMoney(goal.monthlyNeeded)} a month gets you there
+                  <p className="text-sm tnum">
+                    {goal.status === "on-track"
+                      ? `On course for ${formatMoney(goal.projected)}, growing at about ${goal.rate}% a year.`
+                      : `On course for ${formatMoney(goal.projected)}. Another ${formatMoney(goal.extraMonthly)} a month closes the gap${goal.status === "covered-by-savings" ? ", which your saving covers" : ""}.`}
                   </p>
+                  {goal.linked.length > 0 ? (
+                    <p className="text-sm text-muted mt-2">
+                      {formatMoney(goal.linkedValue)} in {goal.linked.map((item) => item.name).join(", ")}
+                      {goal.linkedMonthly > 0 && `, plus ${formatMoney(goal.linkedMonthly)} a month in SIPs`}.
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted mt-2">
+                      Link investments to this goal on the <Link to="/portfolio" className="underline">Portfolio</Link> page to count them here.
+                    </p>
+                  )}
                 </Card>
               ))}
             </div>

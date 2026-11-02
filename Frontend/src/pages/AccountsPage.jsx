@@ -2,9 +2,10 @@ import React, { useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { api } from "../lib/api";
-import { formatMoney, humanize } from "../lib/format";
+import { formatDayMonth, formatMoney, humanize } from "../lib/format";
 import Loaded from "../components/Loaded";
 import {
+  Badge,
   Button,
   Card,
   ConfirmModal,
@@ -62,9 +63,27 @@ const KINDS = {
       { key: "remaining_balance", label: "Amount owed", number: true, required: true },
       { key: "monthly_payment", label: "Monthly payment", number: true },
       { key: "interest_rate", label: "Interest rate (%)", number: true },
+      { key: "due_day", label: "EMI date (day of the month)", number: true, optional: true },
+    ],
+  },
+  insurance: {
+    noun: "policy",
+    path: "/wealth/insurance",
+    fields: [
+      { key: "kind", label: "Type", options: ["term", "health", "life", "other"] },
+      { key: "name", label: "Name", required: true },
+      { key: "insurer", label: "Insurer" },
+      { key: "cover", label: "Cover amount", number: true, required: true },
+      { key: "premium", label: "Premium", number: true },
+      { key: "frequency", label: "Premium paid", options: ["yearly", "monthly", "quarterly"] },
+      { key: "renewal_date", label: "Next renewal", date: true },
+      { key: "for_parents", label: "Covers your parents", boolean: true },
     ],
   },
 };
+
+const LABELS = { term: "Term life", health: "Health", life: "Life", other: "Other", yearly: "Yearly", monthly: "Monthly", quarterly: "Quarterly" };
+const recordId = (record) => record.id || record._id;
 
 const RecordModal = ({ kind, record, onClose }) => {
   const { refresh } = useData();
@@ -74,7 +93,7 @@ const RecordModal = ({ kind, record, onClose }) => {
     Object.fromEntries(
       fields.map((field) => [
         field.key,
-        record?.[field.key] ?? field.options?.[0] ?? "",
+        field.date ? (record?.[field.key] || "").slice(0, 10) : record?.[field.key] ?? field.options?.[0] ?? (field.boolean ? false : ""),
       ]),
     ),
   );
@@ -90,10 +109,12 @@ const RecordModal = ({ kind, record, onClose }) => {
         const body = Object.fromEntries(
           fields.map((field) => [
             field.key,
-            field.number ? Number(form[field.key]) || 0 : form[field.key],
+            field.number
+              ? field.optional && form[field.key] === "" ? null : Number(form[field.key]) || 0
+              : form[field.key],
           ]),
         );
-        await api(record ? `${path}/${record.id}` : path, {
+        await api(record ? `${path}/${recordId(record)}` : path, {
           method: record ? "PUT" : "POST",
           body,
         });
@@ -103,21 +124,29 @@ const RecordModal = ({ kind, record, onClose }) => {
     >
       {fields.map((field) => (
         <Field key={field.key} label={field.label}>
-          {field.options ? (
+          {field.boolean ? (
+            <Select
+              value={form[field.key] ? "yes" : "no"}
+              onChange={(event) => setForm({ ...form, [field.key]: event.target.value === "yes" })}
+            >
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </Select>
+          ) : field.options ? (
             <Select
               value={form[field.key]}
               onChange={(event) => setForm({ ...form, [field.key]: event.target.value })}
             >
               {field.options.map((option) => (
                 <option key={option} value={option}>
-                  {humanize(option)}
+                  {LABELS[option] || humanize(option)}
                 </option>
               ))}
             </Select>
           ) : (
             <Input
               required={field.required}
-              type={field.number ? "number" : "text"}
+              type={field.number ? "number" : field.date ? "date" : "text"}
               min={field.number ? "0" : undefined}
               step={field.number ? "any" : undefined}
               value={form[field.key]}
@@ -145,10 +174,10 @@ const RecordList = ({ title, kind, rows, describe, onEdit, onRemove }) => (
         {rows.map((row) => {
           const { name, detail, value } = describe(row);
           return (
-            <li key={row.id || row._id} className="flex items-center gap-3 px-5 py-3">
+            <li key={recordId(row)} className="flex items-center gap-3 px-5 py-3">
               <div className="min-w-0 flex-1">
                 <p className="font-medium truncate">{name}</p>
-                <p className="text-sm text-muted truncate">{detail}</p>
+                <p className="text-sm text-muted break-words">{detail}</p>
               </div>
               <p className="tnum shrink-0">{formatMoney(value)}</p>
               <div className="flex gap-0.5 shrink-0">
@@ -198,6 +227,54 @@ const CreditModal = ({ credit, onClose }) => {
   );
 };
 
+const ordinal = (day) => `${day}${[11, 12, 13].includes(day % 100) ? "th" : { 1: "st", 2: "nd", 3: "rd" }[day % 10] || "th"}`;
+
+// Rules of thumb: life cover of ten years' income plus debts, and family
+// health cover of at least ₹10 lakh
+const CoverCheck = ({ insurance, liabilities, cashflow }) => {
+  const yearlyIncome = (cashflow.averageMonthlyIncome || 0) * 12;
+  const lifeNeeded = yearlyIncome * 10 + liabilities.total;
+  const lifeCover = insurance.filter((row) => ["term", "life"].includes(row.kind)).reduce((sum, row) => sum + row.cover, 0);
+  const healthCover = insurance.filter((row) => row.kind === "health" && !row.for_parents).reduce((sum, row) => sum + row.cover, 0);
+  const parentsCover = insurance.filter((row) => row.kind === "health" && row.for_parents).reduce((sum, row) => sum + row.cover, 0);
+  const checks = [
+    {
+      label: "Life cover",
+      ok: lifeCover >= lifeNeeded,
+      text: yearlyIncome
+        ? `${formatMoney(lifeCover)} against about ${formatMoney(lifeNeeded)}: ten years of income plus your debts.`
+        : "Add income transactions to work out how much you need.",
+    },
+    {
+      label: "Health cover",
+      ok: healthCover >= 1000000,
+      text: `${formatMoney(healthCover)} for you and your family. ₹10 lakh or more is a common minimum in cities.`,
+    },
+    {
+      label: "Parents' health cover",
+      ok: parentsCover >= 500000,
+      text: parentsCover ? `${formatMoney(parentsCover)}. Premiums for parents also count under 80D.` : "None added. Separate cover for parents keeps your own policy's limit free.",
+    },
+  ];
+
+  return (
+    <Card className="p-5">
+      <h2 className="font-semibold mb-3">Cover check</h2>
+      <ul className="space-y-3">
+        {checks.map((check) => (
+          <li key={check.label}>
+            <p className="font-medium flex items-center gap-2">
+              {check.label} <Badge tone={check.ok ? "gain" : "warn"}>{check.ok ? "Enough" : "Short"}</Badge>
+            </p>
+            <p className="text-sm text-muted">{check.text}</p>
+          </li>
+        ))}
+      </ul>
+      <p className="text-sm text-muted mt-3">Rules of thumb, not advice. Your needs depend on your family and health.</p>
+    </Card>
+  );
+};
+
 const creditBand = (score) =>
   score >= 750 ? "Excellent" : score >= 700 ? "Good" : score >= 650 ? "Fair" : "Needs work";
 
@@ -213,7 +290,7 @@ export default function AccountsPage() {
 
   return (
     <Loaded>
-      {({ assets, liabilities, credit, netWorth }) => (
+      {({ assets, liabilities, credit, netWorth, insurance, cashflow }) => (
         <>
           <PageHeader
             title="Accounts"
@@ -248,7 +325,7 @@ export default function AccountsPage() {
               onRemove={onRemove}
               describe={(row) => ({
                 name: humanize(row.type),
-                detail: `${row.interest_rate ?? 0}% interest, ${formatMoney(row.monthly_payment)} a month`,
+                detail: `${row.interest_rate ?? 0}% interest, ${formatMoney(row.monthly_payment)} a month${row.due_day ? ` on the ${ordinal(row.due_day)}` : ""}`,
                 value: row.remaining_balance,
               })}
             />
@@ -276,6 +353,19 @@ export default function AccountsPage() {
                 value: row.current_value,
               })}
             />
+            <RecordList
+              title="Insurance"
+              kind="insurance"
+              rows={insurance}
+              onEdit={onEdit}
+              onRemove={onRemove}
+              describe={(row) => ({
+                name: row.name,
+                detail: `${LABELS[row.kind]}${row.for_parents ? " for parents" : ""}, ${formatMoney(row.premium)} ${(LABELS[row.frequency] || "yearly").toLowerCase()}${row.renewal_date ? `, renews ${formatDayMonth(row.renewal_date)}` : ""}`,
+                value: row.cover,
+              })}
+            />
+            <CoverCheck insurance={insurance} liabilities={liabilities} cashflow={cashflow} />
             <Card className="p-5">
               <div className="flex items-center justify-between gap-4 mb-3">
                 <h2 className="font-semibold">Credit score</h2>
@@ -320,7 +410,7 @@ export default function AccountsPage() {
               action="Remove"
               onClose={() => setRemoving(null)}
               onConfirm={async () => {
-                await api(`${KINDS[removing.kind].path}/${removing.record.id}`, {
+                await api(`${KINDS[removing.kind].path}/${recordId(removing.record)}`, {
                   method: "DELETE",
                 });
                 await refresh();

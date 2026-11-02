@@ -3,9 +3,10 @@ import {
   Asset,
   CreditScore,
   EPF,
+  Investment,
   Liability,
 } from "../models/Financial.js";
-import { Goal } from "../models/Planning.js";
+import { Bill, Goal, Insurance } from "../models/Planning.js";
 import { ApiError } from "../middleware/errorHandler.js";
 import User from "../models/User.js";
 import { Message } from "../models/Assistant.js";
@@ -125,12 +126,26 @@ const LIABILITY_FIELDS = [
   "monthly_payment",
   "interest_rate",
   "loan_term_months",
+  "due_day",
 ];
+
+const checkDueDay = (item) => {
+  if (item.due_day === undefined || item.due_day === null || item.due_day === "") {
+    delete item.due_day;
+    return;
+  }
+  const day = Number(item.due_day);
+  if (!Number.isInteger(day) || day < 1 || day > 31) {
+    throw new ApiError(400, "Choose a due date between the 1st and the 31st");
+  }
+  item.due_day = day;
+};
 
 export const addLiability = handle(async (req, res) => {
   const userId = req.auth.userId;
   const item = { id: uuidv4(), ...pickFields(req.body, LIABILITY_FIELDS) };
   positiveNumber(item.remaining_balance, "balance");
+  checkDueDay(item);
 
   const doc =
     (await Liability.findOne({ user_id: userId })) ||
@@ -145,7 +160,12 @@ export const updateLiability = handle(async (req, res) => {
   const item = doc?.liabilities.find((row) => row.id === req.params.id);
   if (!item) throw new ApiError(404, "Debt not found");
 
-  Object.assign(item, pickFields(req.body, LIABILITY_FIELDS));
+  const fields = pickFields(req.body, LIABILITY_FIELDS);
+  if ("due_day" in fields) {
+    checkDueDay(fields);
+    if (!("due_day" in fields)) item.due_day = undefined;
+  }
+  Object.assign(item, fields);
   await doc.save();
   res.json({ success: true, data: item });
 });
@@ -229,7 +249,120 @@ export const updateGoal = handle(async (req, res) => {
 });
 
 export const removeGoal = handle(async (req, res) => {
-  await Goal.deleteOne({ _id: req.params.id, user_id: req.auth.userId });
+  const userId = req.auth.userId;
+  const { deletedCount } = await Goal.deleteOne({ _id: req.params.id, user_id: userId });
+  if (deletedCount) {
+    // Investments linked to the goal stay, just without the link
+    const doc = await Investment.findOne({ user_id: userId });
+    if (doc?.portfolio) {
+      for (const item of [...doc.portfolio.stocks, ...doc.portfolio.mutual_funds, ...doc.portfolio.other]) {
+        if (item.goal_id === req.params.id) item.goal_id = null;
+      }
+      await doc.save();
+    }
+  }
+  res.json({ success: true });
+});
+
+// Insurance policies
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const POLICY_KINDS = ["term", "health", "life", "other"];
+const FREQUENCIES = ["monthly", "quarterly", "yearly"];
+
+const policyFields = (body, partial) => {
+  const fields = {};
+  if (!partial || body.kind !== undefined) {
+    if (!POLICY_KINDS.includes(body.kind)) throw new ApiError(400, "Choose the type of cover");
+    fields.kind = body.kind;
+  }
+  if (!partial || body.name !== undefined) {
+    if (!String(body.name || "").trim()) throw new ApiError(400, "Give this policy a name");
+    fields.name = String(body.name).trim().slice(0, 120);
+  }
+  if (body.insurer !== undefined) fields.insurer = String(body.insurer).trim().slice(0, 120);
+  if (!partial || body.cover !== undefined) fields.cover = positiveNumber(body.cover || 0, "cover amount");
+  if (!partial || body.premium !== undefined) fields.premium = positiveNumber(body.premium || 0, "premium");
+  if (body.frequency !== undefined) {
+    if (!FREQUENCIES.includes(body.frequency)) throw new ApiError(400, "Choose how often the premium is paid");
+    fields.frequency = body.frequency;
+  }
+  if (body.renewal_date !== undefined) {
+    if (body.renewal_date && !DATE.test(body.renewal_date)) throw new ApiError(400, "Enter a valid renewal date");
+    fields.renewal_date = body.renewal_date || undefined;
+  }
+  if (body.for_parents !== undefined) fields.for_parents = !!body.for_parents;
+  return fields;
+};
+
+export const addInsurance = handle(async (req, res) => {
+  const policy = await Insurance.create({ user_id: req.auth.userId, ...policyFields(req.body, false) });
+  res.status(201).json({ success: true, data: policy });
+});
+
+export const updateInsurance = handle(async (req, res) => {
+  const policy = await Insurance.findOneAndUpdate(
+    { _id: req.params.id, user_id: req.auth.userId },
+    policyFields(req.body, true),
+    { new: true, runValidators: true },
+  );
+  if (!policy) throw new ApiError(404, "Policy not found");
+  res.json({ success: true, data: policy });
+});
+
+export const removeInsurance = handle(async (req, res) => {
+  await Insurance.deleteOne({ _id: req.params.id, user_id: req.auth.userId });
+  res.json({ success: true });
+});
+
+// Bills to be reminded about
+const billFields = (body, partial) => {
+  const fields = {};
+  if (!partial || body.name !== undefined) {
+    if (!String(body.name || "").trim()) throw new ApiError(400, "Give this bill a name");
+    fields.name = String(body.name).trim().slice(0, 120);
+  }
+  if (!partial || body.amount !== undefined) fields.amount = positiveNumber(body.amount || 0, "amount");
+  if (body.category !== undefined) fields.category = String(body.category).trim().slice(0, 60) || "Bills";
+  if (body.frequency !== undefined) {
+    if (!FREQUENCIES.includes(body.frequency)) throw new ApiError(400, "Choose how often it's due");
+    fields.frequency = body.frequency;
+  }
+  if (!partial || body.due_day !== undefined) {
+    const day = Number(body.due_day);
+    if (!Number.isInteger(day) || day < 1 || day > 31) {
+      throw new ApiError(400, "Choose a due date between the 1st and the 31st");
+    }
+    fields.due_day = day;
+  }
+  if (body.due_month !== undefined && body.due_month !== null && body.due_month !== "") {
+    const month = Number(body.due_month);
+    if (!Number.isInteger(month) || month < 1 || month > 12) throw new ApiError(400, "Choose the month it's next due");
+    fields.due_month = month;
+  }
+  if ((fields.frequency || "monthly") !== "monthly" && !partial && !fields.due_month) {
+    throw new ApiError(400, "Choose the month it's next due");
+  }
+  if (body.active !== undefined) fields.active = !!body.active;
+  return fields;
+};
+
+export const addBill = handle(async (req, res) => {
+  const bill = await Bill.create({ user_id: req.auth.userId, ...billFields(req.body, false) });
+  res.status(201).json({ success: true, data: bill });
+});
+
+export const updateBill = handle(async (req, res) => {
+  const bill = await Bill.findOneAndUpdate(
+    { _id: req.params.id, user_id: req.auth.userId },
+    billFields(req.body, true),
+    { new: true, runValidators: true },
+  );
+  if (!bill) throw new ApiError(404, "Bill not found");
+  res.json({ success: true, data: bill });
+});
+
+export const removeBill = handle(async (req, res) => {
+  await Bill.deleteOne({ _id: req.params.id, user_id: req.auth.userId });
   res.json({ success: true });
 });
 

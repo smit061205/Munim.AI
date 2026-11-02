@@ -16,6 +16,12 @@ import {
   updateAsset,
   updateGoal,
   updateLiability,
+  addInsurance,
+  updateInsurance,
+  removeInsurance,
+  addBill,
+  updateBill,
+  removeBill,
 } from "../controllers/wealthController.js";
 
 const router = express.Router();
@@ -39,6 +45,12 @@ router.post("/goals", createGoal);
 router.put("/goals/:id", updateGoal);
 router.delete("/goals/:id", removeGoal);
 
+router.post("/insurance", addInsurance);
+router.put("/insurance/:id", updateInsurance);
+router.delete("/insurance/:id", removeInsurance);
+router.post("/bills", addBill);
+router.put("/bills/:id", updateBill);
+router.delete("/bills/:id", removeBill);
 router.post("/sample-data", addSampleData);
 router.delete("/sample-data", removeSampleData);
 

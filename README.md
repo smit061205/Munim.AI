@@ -4,15 +4,18 @@ An investing and personal finance app for people in India. Users answer an inves
 
 ## Features
 
-- **Home**: net worth history, financial health score, insights, portfolio mix, spending and cash flow
-- **Portfolio**: stocks, mutual funds and EPF, compared with the target allocation, with a rebalancing plan and CAMS or KFintech statement import
-- **Cash flow**: transactions, budgets, spreadsheet import and CSV export
-- **Accounts**: bank accounts, property, vehicles, debts and credit score
-- **Goals**: target amounts and dates, with the monthly saving each one needs
-- **Calculators**: SIP, retirement corpus, and prepay a loan or invest, started from your own numbers
+- **Home**: net worth history, financial health score, a weekly note written by AI, insights, what's coming up, and "Ask about this" buttons
+- **Portfolio**: stocks, mutual funds, FDs, RDs, PPF, NPS, gold bonds and EPF, with daily NAVs from AMFI and NSE prices, yearly return (XIRR) per holding against the Nifty 50, a SIP tracker, goal links, a rebalancing plan, and CAMS, KFintech, NSDL or CDSL statement import
+- **Cash flow**: transactions, budgets, recurring payments and subscriptions, a calendar of what's due, categorisation rules that learn from corrections, AI categorisation, spreadsheet or PDF import, and CSV export
+- **Accounts**: bank accounts, property, vehicles, debts with EMI dates, insurance with a cover check, and credit score
+- **Goals**: projections from linked investments and SIPs, with on-track or behind status
+- **Tax**: old against new regime, 80C and 80D found in your records, capital gains this year, and tax-loss and tax-free gain harvesting
+- **Calculators**: SIP, retirement corpus, prepay a loan or invest, and debt payoff, started from your own numbers
 - **Reports**: monthly statements with a forecast, as CSV or printed to PDF
-- **Assistant**: streaming answers, saved conversations, spreadsheet attachments and per-user limits
-- **Settings**: profile, risk profile, what the assistant can see, data export, password and account deletion
+- **Assistant**: looks things up with tools, proposes budgets, goals, rules and bill reminders for you to confirm, draws charts, suggests follow-ups, remembers what you ask it to, replies in English, Hindi or Hinglish, and takes voice input
+- **Notifications**: bills and EMIs due, budgets nearly used, missed SIPs, goals behind, duplicate charges and price rises, plus a Monday summary email
+- **Settings**: profile, risk profile, what the assistant can see, assistant language and memory, weekly email, data export, password and account deletion
+- Dark mode, and a privacy mode that blurs amounts
 
 New accounts start empty, and can load clearly labelled sample data.
 
@@ -74,7 +77,13 @@ All settings live in `server/.env`:
 | `AI_MAX_OUTPUT_TOKENS` | `1024` | Longest reply |
 | `AI_MAX_MESSAGE_CHARS` | `4000` | Longest user message |
 
-Each prompt holds a snapshot of the user's finances, the rolling summary and as many recent messages as fit. Older messages are summarised rather than dropped. Categories a user turns off in Settings are removed on the server before the prompt is built. A message that fails before any reply arrives isn't counted.
+Each prompt holds a short snapshot of the user's finances, anything they asked the assistant to remember, the page they're on, the rolling summary and as many recent messages as fit. Older messages are summarised rather than dropped. For anything more specific the model calls tools (`server/services/assistantTools.js`), up to four rounds per reply. Changes it suggests are saved as pending actions and only run when the user presses Confirm. Categories a user turns off in Settings are removed from the prompt and refused by the tools. A message that fails before any reply arrives isn't counted.
+
+Background AI work (categorising transactions, reading unfamiliar statements, the weekly note) counts towards the monthly token limit but not the daily message limit.
+
+## Market data
+
+Mutual fund NAVs come from AMFI's daily file and share prices from Yahoo Finance (NSE, delayed). Prices refresh when they're more than six hours old, and once a day from 8am IST. Holdings marked "Enter the value myself" are left alone.
 
 ## API
 
@@ -88,10 +97,14 @@ Everything except sign-up and sign-in needs an `Authorization: Bearer <token>` h
 | `/api/transactions` | Transactions |
 | `/api/budgets` | Budgets |
 | `/api/accounts` | Bank accounts |
-| `/api/investments` | Stocks, mutual funds and statement import |
-| `/api/ingest/excel` | Spreadsheet import |
+| `/api/wealth/insurance`, `/api/wealth/bills` | Insurance policies and bill reminders |
+| `/api/transactions/rules` | Categorisation rules |
+| `/api/investments` | Stocks, funds, other investments, price refresh, fund search, quotes and statement import |
+| `/api/tax` | Tax summary and the user's tax details |
+| `/api/ingest/excel` | Spreadsheet or PDF bank statement import |
 | `/api/permissions` | What the assistant can see |
-| `/api/assistant` | Conversations, messages and usage |
+| `/api/assistant` | Conversations, messages, regenerate, feedback, actions, memory and usage |
+| `/api/notifications` | Notifications and the weekly note |
 
 ## Disclaimer
 
