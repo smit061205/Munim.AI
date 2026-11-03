@@ -1,5 +1,13 @@
-export const API_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5001/api";
+// Every route lives under /api. A VITE_API_URL set to just the server's
+// address, with or without a trailing slash, still reaches them.
+const normaliseApiUrl = (url) => {
+  const trimmed = url.trim().replace(/\/+$/, "");
+  return trimmed.endsWith("/api") ? trimmed : `${trimmed}/api`;
+};
+
+export const API_URL = normaliseApiUrl(
+  import.meta.env.VITE_API_URL || "http://localhost:5001/api",
+);
 
 const TOKEN_KEY = "munim-auth-token";
 
