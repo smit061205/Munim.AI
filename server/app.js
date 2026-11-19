@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import express from "express";
 import { connectDB } from "./config/db.js";
 import dotenv from "dotenv";
@@ -83,9 +84,11 @@ app.use(withAuth);
 
 // Health check endpoint (no auth required)
 // The commit says which version is live, so a deploy can be checked
+const DB_STATES = ["disconnected", "connected", "connecting", "disconnecting"];
 const health = (req, res) => {
   res.json({
     status: "ok",
+    database: DB_STATES[mongoose.connection.readyState] || "unknown",
     timestamp: new Date().toISOString(),
     commit: (process.env.VERCEL_GIT_COMMIT_SHA || process.env.RENDER_GIT_COMMIT)?.slice(0, 8) || null,
   });
@@ -96,6 +99,19 @@ app.get("/api/health", health);
 // MongoDB connection. On Vercel each warm function instance keeps its
 // connection between requests, so it's made once per instance.
 connectDB().catch((error) => console.error("MongoDB connection error:", error.message));
+
+// If the first attempt failed (wrong password, IP not allowed), try again on
+// the next request instead of letting every query wait 10 s and fail
+app.use("/api", async (req, res, next) => {
+  if (req.path === "/health" || mongoose.connection.readyState === 1) return next();
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    console.error("MongoDB connection error:", error.message);
+    res.status(503).json({ success: false, status: 503, message: "The database is unavailable. Try again in a minute." });
+  }
+});
 
 // Create multer instance
 const upload = multer({
