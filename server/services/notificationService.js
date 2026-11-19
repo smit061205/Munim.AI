@@ -244,13 +244,12 @@ export const runJobs = async ({ budgetMs = Infinity, anyHour = false } = {}) => 
         const wantsDigest = monday && user.preferences?.weeklyDigest !== false && user.digestSentWeek !== week && (user.emailVerified || !isEmailConfigured());
         if (wantsDigest) {
           overview = await sendWeeklyDigest(user);
-          user.digestSentWeek = week;
-          await user.save();
+          // updateOne, not save: older accounts may miss fields that are now required
+          await User.updateOne({ _id: user._id }, { $set: { digestSentWeek: week } });
         }
         if (user.remindersSyncedOn !== today) {
           await syncNotifications(user, overview);
-          user.remindersSyncedOn = today;
-          await user.save();
+          await User.updateOne({ _id: user._id }, { $set: { remindersSyncedOn: today } });
         }
       } catch (error) {
         console.error(`Scheduled jobs failed for ${userId}:`, error.message);

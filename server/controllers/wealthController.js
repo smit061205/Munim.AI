@@ -227,12 +227,19 @@ export const saveCreditScore = handle(async (req, res) => {
   res.json({ success: true, data });
 });
 
+// A goal's date must be a real date, today or later
+const checkGoalDate = (value) => {
+  if (!value || Number.isNaN(Date.parse(value))) throw new ApiError(400, "Choose a target date");
+  const today = new Date().toISOString().slice(0, 10);
+  if (String(value).slice(0, 10) < today) throw new ApiError(400, "Choose a target date in the future");
+  return value;
+};
+
 export const createGoal = handle(async (req, res) => {
   const { name, target_amount, saved_amount, target_date } = req.body;
   if (!name?.trim()) throw new ApiError(400, "Give this goal a name");
-  if (!target_date || Number.isNaN(Date.parse(target_date))) {
-    throw new ApiError(400, "Choose a target date");
-  }
+  checkGoalDate(target_date);
+  if (!(Number(target_amount) > 0)) throw new ApiError(400, "Enter a valid target amount");
 
   const goal = await Goal.create({
     user_id: req.auth.userId,
@@ -245,14 +252,19 @@ export const createGoal = handle(async (req, res) => {
 });
 
 export const updateGoal = handle(async (req, res) => {
+  const changes = pickFields(req.body, ["name", "target_amount", "saved_amount", "target_date"]);
+  if ("name" in changes) {
+    changes.name = String(changes.name || "").trim();
+    if (!changes.name) throw new ApiError(400, "Give this goal a name");
+  }
+  if ("target_amount" in changes && !(Number(changes.target_amount) > 0)) {
+    throw new ApiError(400, "Enter a valid target amount");
+  }
+  if ("saved_amount" in changes) changes.saved_amount = positiveNumber(changes.saved_amount || 0, "saved amount");
+  if ("target_date" in changes) checkGoalDate(changes.target_date);
   const goal = await Goal.findOneAndUpdate(
     { _id: req.params.id, user_id: req.auth.userId },
-    pickFields(req.body, [
-      "name",
-      "target_amount",
-      "saved_amount",
-      "target_date",
-    ]),
+    changes,
     { new: true, runValidators: true },
   );
   if (!goal) throw new ApiError(404, "Goal not found");

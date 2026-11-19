@@ -31,6 +31,12 @@ router.post(
     }
 
     const file = req.files[0];
+    if (!/\.(csv|xlsx?|pdf)$/i.test(file.originalname || "")) {
+      return res.status(400).json({
+        success: false,
+        message: "Choose a CSV, Excel (.xls or .xlsx) or PDF bank statement.",
+      });
+    }
     let result;
     let meta = { sheets: [], rowsBySheet: {} };
 

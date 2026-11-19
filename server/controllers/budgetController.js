@@ -1,6 +1,20 @@
 import { Budget } from "../models/Financial.js";
 import { ApiError } from "../middleware/errorHandler.js";
 
+// A budget needs a positive amount and an end date on or after its start
+const checkBudget = ({ budgetAmount, startDate, endDate }) => {
+  if (budgetAmount !== undefined) {
+    const amount = Number(budgetAmount);
+    if (!Number.isFinite(amount) || amount <= 0) throw new ApiError(400, "Budget amount must be more than zero");
+  }
+  for (const value of [startDate, endDate]) {
+    if (value !== undefined && Number.isNaN(Date.parse(value))) throw new ApiError(400, "Enter valid budget dates");
+  }
+  if (startDate !== undefined && endDate !== undefined && new Date(endDate) < new Date(startDate)) {
+    throw new ApiError(400, "The end date must be on or after the start date");
+  }
+};
+
 // @desc    Get all budgets for a user
 // @route   GET /api/v1/budgets
 // @access  Private
@@ -54,6 +68,7 @@ export const createBudget = async (req, res, next) => {
         "Please provide category, budgetAmount, startDate, and endDate"
       );
     }
+    checkBudget({ budgetAmount, startDate, endDate });
 
     let budgetDoc = await Budget.findOne({ user_id: userId });
 
@@ -116,7 +131,13 @@ export const updateBudget = async (req, res, next) => {
       throw new ApiError(404, "Budget not found");
     }
 
-    const oldBudgetAmount = budgetDoc.budgets[budgetIndex].budgetAmount;
+    const current = budgetDoc.budgets[budgetIndex];
+    checkBudget({
+      budgetAmount,
+      startDate: startDate ?? current.startDate,
+      endDate: endDate ?? current.endDate,
+    });
+    const oldBudgetAmount = current.budgetAmount;
 
     // Update budget fields
     if (category) budgetDoc.budgets[budgetIndex].category = category;

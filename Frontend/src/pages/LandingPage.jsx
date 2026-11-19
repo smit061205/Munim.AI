@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { api } from "../lib/api";
 import {
   ArrowLeftRight,
   ArrowRight,
@@ -166,7 +167,18 @@ const HeroDemo = () => {
   );
 };
 
-const Hero = ({ isSignedIn }) => (
+// The demo account only exists where the server offers it (not in production)
+const useDemoEnabled = () => {
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => {
+    api("/auth/demo").then((data) => setEnabled(!!data.enabled)).catch(() => setEnabled(false));
+  }, []);
+  return enabled;
+};
+
+const Hero = ({ isSignedIn }) => {
+  const demoEnabled = useDemoEnabled();
+  return (
   <Shell className="pt-14 pb-20 lg:pt-20 lg:pb-28">
     <div className="grid lg:grid-cols-[1fr_1.15fr] gap-12 lg:gap-14 items-center">
       <div>
@@ -185,7 +197,7 @@ const Hero = ({ isSignedIn }) => (
           </Link>
           {!isSignedIn && (
             <Link to="/sign-in" className="inline-flex items-center h-12 px-5 rounded-xl text-base font-medium text-ink border border-line-strong bg-surface hover:bg-wash">
-              Try the demo account
+              {demoEnabled ? "Try the demo account" : "Sign in"}
             </Link>
           )}
         </div>
@@ -194,7 +206,8 @@ const Hero = ({ isSignedIn }) => (
       <HeroDemo />
     </div>
   </Shell>
-);
+  );
+};
 
 const STEPS = [
   {
