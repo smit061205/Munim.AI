@@ -8,6 +8,7 @@ import {
   EyeOff,
   Goal,
   HelpCircle,
+  History,
   Landmark,
   LayoutDashboard,
   LogOut,
@@ -406,9 +407,46 @@ const TopBar = ({ onSearch }) => (
   </header>
 );
 
+// Past chats, newest first, shown in place of the chat until one is picked
+const ChatHistory = ({ onPick }) => {
+  const { conversations, conversationId, openConversation, startNew } = useAssistant();
+  const when = (date) =>
+    date ? new Date(date).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "";
+  return (
+    <div className="flex-1 min-h-0 overflow-y-auto p-3">
+      <button
+        onClick={() => { startNew(); onPick(); }}
+        className="w-full flex items-center gap-2 px-3 py-2.5 mb-2 rounded-lg border border-line-strong text-sm font-medium hover:bg-wash"
+      >
+        <Plus size={16} /> New conversation
+      </button>
+      {conversations.length === 0 ? (
+        <p className="text-sm text-muted px-3 py-4">Your conversations are saved here once you ask something.</p>
+      ) : (
+        <ul className="space-y-0.5">
+          {conversations.map((conversation) => (
+            <li key={conversation._id}>
+              <button
+                onClick={() => { openConversation(conversation._id); onPick(); }}
+                className={`w-full flex items-baseline gap-3 text-left px-3 py-2.5 rounded-lg ${
+                  conversation._id === conversationId ? "bg-accent-soft" : "hover:bg-wash"
+                }`}
+              >
+                <span className="flex-1 min-w-0 truncate">{conversation.title}</span>
+                <span className="shrink-0 text-xs text-muted tnum">{when(conversation.updated_at)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+
 const AssistantPanel = () => {
   const { isPanelOpen, setPanelOpen, startNew } = useAssistant();
   const navigate = useNavigate();
+  const [showHistory, setShowHistory] = useState(false);
   if (!isPanelOpen) return null;
 
   return (
@@ -421,10 +459,17 @@ const AssistantPanel = () => {
           <span className="w-7 h-7 rounded-lg bg-accent-soft text-accent inline-flex items-center justify-center">
             <MessageCircle size={15} />
           </span>
-          <h2 className="font-semibold">Munim</h2>
+          <h2 className="font-semibold">{showHistory ? "Past conversations" : "Munim"}</h2>
         </div>
         <div className="flex gap-0.5">
-          <IconButton label="New conversation" onClick={startNew}>
+          <IconButton
+            label={showHistory ? "Back to chat" : "Past conversations"}
+            onClick={() => setShowHistory((open) => !open)}
+            className={showHistory ? "bg-accent-soft text-accent" : ""}
+          >
+            <History size={17} />
+          </IconButton>
+          <IconButton label="New conversation" onClick={() => { startNew(); setShowHistory(false); }}>
             <Plus size={18} />
           </IconButton>
           <IconButton
@@ -441,7 +486,7 @@ const AssistantPanel = () => {
           </IconButton>
         </div>
       </div>
-      <AssistantChat />
+      {showHistory ? <ChatHistory onPick={() => setShowHistory(false)} /> : <AssistantChat />}
     </aside>
   );
 };
