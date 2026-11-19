@@ -116,7 +116,13 @@ const monthsAgo = (months) => {
   return since.toISOString().slice(0, 10);
 };
 
-export const NetWorthChart = ({ history }) => {
+// A value over time with ranges. Used for net worth and, with valueKey, for
+// what the investments were worth.
+export const NetWorthChart = ({ history: allRows, valueKey = "value", label = "Net worth", extra }) => {
+  const history = useMemo(
+    () => allRows.filter((row) => typeof row[valueKey] === "number"),
+    [allRows, valueKey],
+  );
   const [chosenRange, setRange] = useState(12);
   const [showTable, setShowTable] = useState(false);
 
@@ -172,10 +178,10 @@ export const NetWorthChart = ({ history }) => {
 
       {showTable ? (
         <DataTable
-          columns={["Date", "Net worth"]}
+          columns={["Date", label, ...(extra ? [extra.label] : [])]}
           rows={[...data]
             .reverse()
-            .map((row) => [formatDayMonth(row.date), formatMoney(row.value)])}
+            .map((row) => [formatDayMonth(row.date), formatMoney(row[valueKey]), ...(extra ? [row[extra.key] == null ? "–" : formatMoney(row[extra.key])] : [])])}
         />
       ) : (
         <div className="h-64">
@@ -210,14 +216,19 @@ export const NetWorthChart = ({ history }) => {
                   active && payload?.length ? (
                     <TooltipCard
                       title={formatDayMonth(payload[0].payload.date)}
-                      rows={[{ label: "Net worth", value: payload[0].value }]}
+                      rows={[
+                        { label, value: payload[0].value },
+                        ...(extra && payload[0].payload[extra.key] != null
+                          ? [{ label: extra.label, value: payload[0].payload[extra.key] }]
+                          : []),
+                      ]}
                     />
                   ) : null
                 }
               />
               <Area
                 type="monotone"
-                dataKey="value"
+                dataKey={valueKey}
                 stroke={COLORS.accent}
                 strokeWidth={2}
                 fill="url(#netWorthFill)"
@@ -510,6 +521,102 @@ export const AllocationCompare = ({ allocation }) => {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+};
+
+// Income sources flow into one bar, which flows out to spending and savings.
+// Drawn by hand: three columns, with ribbons whose width is the amount.
+export const MoneyFlow = ({ flow }) => {
+  const [showTable, setShowTable] = useState(false);
+  const left = [...flow.sources, ...(flow.shortfall ? [{ name: "From savings", amount: flow.shortfall, muted: true }] : [])];
+  const right = [...flow.uses, ...(flow.saved ? [{ name: "Saved", amount: flow.saved, saved: true }] : [])];
+  const total = left.reduce((sum, row) => sum + row.amount, 0);
+
+  const width = 640;
+  const gap = 6;
+  const height = 300;
+  const bar = 10;
+  const columns = { left: 150, middle: width / 2 - bar / 2, right: width - 150 - bar };
+  const stack = (rows) => {
+    const usable = height - gap * (rows.length - 1);
+    let y = 0;
+    return rows.map((row, index) => {
+      const size = Math.max((row.amount / total) * usable, 1.5);
+      const placed = { ...row, y, size, color: row.saved ? SERIES[1] : row.muted ? OTHER : index < SERIES.length ? SERIES[index] : OTHER };
+      y += size + gap;
+      return placed;
+    });
+  };
+  const sources = stack(left).map((row) => ({ ...row, color: row.muted ? OTHER : SERIES[0] }));
+  const uses = stack(right).map((row) => ({ ...row, color: row.saved ? SERIES[1] : OTHER }));
+  const middleHeight = height;
+
+  // Where each ribbon meets the middle bar, packed without gaps
+  let inY = 0;
+  let outY = 0;
+  const ribbon = (x1, y1, x2, y2, size) => {
+    const mid = (x1 + x2) / 2;
+    return `M${x1},${y1} C${mid},${y1} ${mid},${y2} ${x2},${y2} L${x2},${y2 + size} C${mid},${y2 + size} ${mid},${y1 + size} ${x1},${y1 + size} Z`;
+  };
+  const scale = middleHeight / total;
+
+  return (
+    <div>
+      <div className="flex justify-end mb-2">
+        <ViewToggle showTable={showTable} onChange={setShowTable} />
+      </div>
+      {showTable ? (
+        <DataTable
+          columns={["", "Amount"]}
+          rows={[
+            ...left.map((row) => [`In: ${row.name}`, formatMoney(row.amount)]),
+            ...right.map((row) => [`Out: ${row.name}`, formatMoney(row.amount)]),
+          ]}
+        />
+      ) : (
+        <svg viewBox={`-4 -4 ${width + 8} ${height + 8}`} className="w-full h-auto" role="img" aria-label="Money flow from income to spending and savings">
+          {sources.map((row) => {
+            const size = row.amount * scale;
+            const path = ribbon(columns.left + bar, row.y, columns.middle, inY, Math.min(size, row.size));
+            inY += size;
+            return (
+              <path key={`in-${row.name}`} d={path} fill={row.color} opacity={0.18}>
+                <title>{`${row.name}: ${formatMoney(row.amount)}`}</title>
+              </path>
+            );
+          })}
+          {uses.map((row) => {
+            const size = row.amount * scale;
+            const path = ribbon(columns.middle + bar, outY, columns.right, row.y, Math.min(size, row.size));
+            outY += size;
+            return (
+              <path key={`out-${row.name}`} d={path} fill={row.color} opacity={row.saved ? 0.3 : 0.18}>
+                <title>{`${row.name}: ${formatMoney(row.amount)}`}</title>
+              </path>
+            );
+          })}
+          <rect x={columns.middle} y={0} width={bar} height={middleHeight} rx={2} fill={COLORS.accent} />
+          {sources.map((row) => (
+            <g key={`l-${row.name}`}>
+              <rect x={columns.left} y={row.y} width={bar} height={row.size} rx={2} fill={row.color} />
+              <text x={columns.left - 8} y={row.y + row.size / 2} textAnchor="end" dominantBaseline="middle" fontSize="12" fill="var(--color-ink)">
+                {row.name}
+                <tspan fill="var(--color-muted)"> {formatCompact(row.amount)}</tspan>
+              </text>
+            </g>
+          ))}
+          {uses.map((row) => (
+            <g key={`r-${row.name}`}>
+              <rect x={columns.right} y={row.y} width={bar} height={row.size} rx={2} fill={row.saved ? SERIES[1] : COLORS.muted} />
+              <text x={columns.right + bar + 8} y={row.y + row.size / 2} dominantBaseline="middle" fontSize="12" fill="var(--color-ink)">
+                {row.name}
+                <tspan fill="var(--color-muted)"> {formatCompact(row.amount)}</tspan>
+              </text>
+            </g>
+          ))}
+        </svg>
+      )}
     </div>
   );
 };

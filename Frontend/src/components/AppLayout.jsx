@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowLeftRight,
@@ -7,6 +7,7 @@ import {
   Eye,
   EyeOff,
   Goal,
+  HelpCircle,
   Landmark,
   LayoutDashboard,
   LogOut,
@@ -15,6 +16,7 @@ import {
   Plus,
   Search,
   Settings,
+  Shield,
   Upload,
   X,
 } from "lucide-react";
@@ -23,7 +25,10 @@ import { DataProvider } from "../context/DataContext";
 import { AssistantProvider, useAssistant } from "../context/AssistantContext";
 import AssistantChat from "./AssistantChat";
 import CommandPalette from "./CommandPalette";
-import { IconButton } from "./ui";
+import ErrorBoundary from "./ErrorBoundary";
+import AppLock from "./AppLock";
+import { Logo } from "./Logo";
+import { IconButton, useToast } from "./ui";
 import { api } from "../lib/api";
 import { getPrivacy, setPrivacy } from "../lib/display";
 
@@ -166,12 +171,6 @@ const NAV = [
   { to: "/plan", label: "Plan", icon: Goal },
 ];
 
-export const Logo = ({ className = "" }) => (
-  <span className={`inline-flex items-center gap-2 font-semibold tracking-tight ${className}`}>
-    <img src="/favicon.svg" alt="" className="w-6 h-6" />
-    Munim.AI
-  </span>
-);
 
 const railItem = ({ isActive }) =>
   `group flex items-center gap-3 px-2.5 h-9 rounded-lg text-[15px] transition-colors ${
@@ -228,6 +227,14 @@ const AccountMenu = ({ compact = false }) => {
           <Link to="/assistant" onClick={() => setOpen(false)} className={row}>
             <MessageCircle size={16} className="text-muted" /> Conversation history
           </Link>
+          <Link to="/help" onClick={() => setOpen(false)} className={row}>
+            <HelpCircle size={16} className="text-muted" /> Help and feedback
+          </Link>
+          {user.role === "admin" && (
+            <Link to="/admin" onClick={() => setOpen(false)} className={row}>
+              <Shield size={16} className="text-muted" /> Admin
+            </Link>
+          )}
           <button onClick={() => setPrivacy(!privacy)} className={row}>
             {privacy ? <Eye size={16} className="text-muted" /> : <EyeOff size={16} className="text-muted" />}
             {privacy ? "Show amounts" : "Hide amounts"}
@@ -340,6 +347,36 @@ const SampleNotice = () => {
   );
 };
 
+// Until the address is confirmed, the weekly email and reminders can't go out
+const VerifyNotice = () => {
+  const { user } = useAuth();
+  const toast = useToast();
+  const [sent, setSent] = useState(false);
+  if (user.emailVerified || user.email === "demo@munim.local") return null;
+
+  const resend = async () => {
+    try {
+      await api("/auth/resend-verification", { method: "POST" });
+      setSent(true);
+      toast.success(`Confirmation link sent to ${user.email}`);
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
+
+  return (
+    <button
+      onClick={resend}
+      disabled={sent}
+      className="hidden sm:inline-flex items-center gap-2 h-7 px-2.5 rounded-full bg-accent-soft text-accent text-xs font-medium hover:opacity-90 disabled:opacity-70"
+      title="Confirm your email to get the weekly summary and reminders"
+    >
+      <span className="w-1.5 h-1.5 rounded-full bg-accent" aria-hidden="true" />
+      {sent ? "Check your inbox" : "Confirm your email"}
+    </button>
+  );
+};
+
 const TopBar = ({ onSearch }) => (
   <header className="no-print sticky top-0 z-20 h-14 flex items-center justify-between gap-3 px-4 lg:px-8 bg-canvas/85 backdrop-blur">
     <div className="flex items-center gap-3 min-w-0">
@@ -355,6 +392,7 @@ const TopBar = ({ onSearch }) => (
       </button>
     </div>
     <div className="flex items-center gap-1 shrink-0">
+      <VerifyNotice />
       <SampleNotice />
       <Link to="/import" className="hidden lg:inline-flex items-center gap-1.5 h-8 px-3 ml-1 rounded-lg text-sm font-medium text-muted hover:text-ink hover:bg-wash">
         <Plus size={16} /> Import
@@ -441,12 +479,17 @@ const Shell = () => {
       <div className={`lg:pl-60 transition-[padding] duration-200 ${panelBeside ? "xl:pr-[428px]" : ""}`}>
         <TopBar onSearch={openPalette} />
         <main className="@container px-4 lg:px-8 pt-2 pb-28 lg:pb-16 max-w-[1120px] mx-auto">
-          <Outlet />
+          <ErrorBoundary resetKey={pathname}>
+            <Suspense fallback={<div className="h-64 rounded-2xl bg-wash animate-pulse" aria-label="Loading" />}>
+              <Outlet />
+            </Suspense>
+          </ErrorBoundary>
         </main>
       </div>
       {pathname !== "/assistant" && <AssistantPanel />}
       <MobileTabs />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <AppLock />
     </div>
   );
 };

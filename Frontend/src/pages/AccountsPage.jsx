@@ -59,12 +59,26 @@ const KINDS = {
       {
         key: "type",
         label: "Type",
-        options: ["home_loan", "car_loan", "personal_loan", "education_loan", "business_loan", "credit_card"],
+        options: ["home_loan", "car_loan", "personal_loan", "education_loan", "business_loan"],
       },
       { key: "remaining_balance", label: "Amount owed", number: true, required: true },
       { key: "monthly_payment", label: "Monthly payment", number: true },
       { key: "interest_rate", label: "Interest rate (%)", number: true },
       { key: "due_day", label: "EMI date (day of the month)", number: true, optional: true },
+    ],
+  },
+  card: {
+    noun: "credit card",
+    path: "/wealth/liabilities",
+    fixed: { type: "credit_card" },
+    fields: [
+      { key: "name", label: "Card name", required: true },
+      { key: "credit_limit", label: "Credit limit", number: true, optional: true },
+      { key: "remaining_balance", label: "Amount due now", number: true, required: true },
+      { key: "monthly_payment", label: "What you usually pay a month", number: true },
+      { key: "statement_day", label: "Statement date (day of the month)", number: true, optional: true },
+      { key: "due_day", label: "Payment due (day of the month)", number: true, optional: true },
+      { key: "interest_rate", label: "Interest if unpaid (% a year)", number: true },
     ],
   },
   insurance: {
@@ -89,7 +103,7 @@ const recordId = (record) => record.id || record._id;
 const RecordModal = ({ kind, record, onClose }) => {
   const { refresh } = useData();
   const toast = useToast();
-  const { noun, path, fields } = KINDS[kind];
+  const { noun, path, fields, fixed } = KINDS[kind];
   const [form, setForm] = useState(
     Object.fromEntries(
       fields.map((field) => [
@@ -107,14 +121,15 @@ const RecordModal = ({ kind, record, onClose }) => {
       submitLabel={record ? "Save changes" : `Add ${noun}`}
       onClose={onClose}
       onSubmit={async () => {
-        const body = Object.fromEntries(
-          fields.map((field) => [
+        const body = Object.fromEntries([
+          ...Object.entries(fixed || {}),
+          ...fields.map((field) => [
             field.key,
             field.number
               ? field.optional && form[field.key] === "" ? null : Number(form[field.key]) || 0
               : form[field.key],
           ]),
-        );
+        ]);
         await api(record ? `${path}/${recordId(record)}` : path, {
           method: record ? "PUT" : "POST",
           body,
@@ -319,9 +334,28 @@ export default function AccountsPage() {
               })}
             />
             <RecordList
-              title="Debts"
+              title="Credit cards"
+              kind="card"
+              rows={liabilities.items.filter((row) => row.type === "credit_card")}
+              onEdit={onEdit}
+              onRemove={onRemove}
+              describe={(row) => {
+                const used = row.credit_limit ? Math.round((row.remaining_balance / row.credit_limit) * 100) : null;
+                return {
+                  name: row.name || "Credit card",
+                  detail: [
+                    used !== null && `${used}% of ${formatMoney(row.credit_limit)} limit used${used > 30 ? ", above the 30% lenders like" : ""}`,
+                    row.statement_day && `statement on the ${ordinal(row.statement_day)}`,
+                    row.due_day && `due on the ${ordinal(row.due_day)}`,
+                  ].filter(Boolean).join(", ").replace(/^./, (letter) => letter.toUpperCase()) || "Add the limit and dates to track it",
+                  value: row.remaining_balance,
+                };
+              }}
+            />
+            <RecordList
+              title="Loans"
               kind="debt"
-              rows={liabilities.items}
+              rows={liabilities.items.filter((row) => row.type !== "credit_card")}
               onEdit={onEdit}
               onRemove={onRemove}
               describe={(row) => ({

@@ -14,6 +14,9 @@ const netWorthSnapshotSchema = new mongoose.Schema({
   user_id: { type: String, required: true },
   date: { type: String, required: true }, // yyyy-mm-dd
   value: { type: Number, required: true },
+  // What the investments were worth, and what had gone into them, that day
+  portfolio: Number,
+  invested: Number,
 });
 netWorthSnapshotSchema.index({ user_id: 1, date: 1 }, { unique: true });
 
@@ -85,12 +88,28 @@ notificationSchema.index({ user_id: 1, created_at: -1 });
 
 // Two people sharing a summary of their money with each other. Sharing only
 // starts once the invited person accepts, and either side can end it.
-const householdLinkSchema = new mongoose.Schema({
-  owner_id: { type: String, required: true, index: true },
-  member_email: { type: String, required: true, lowercase: true, trim: true },
-  member_id: { type: String, index: true },
-  relation: { type: String, default: "Family" },
-  status: { type: String, enum: ["pending", "accepted"], default: "pending" },
+// A read-only link to a user's summary, for a partner or a CA. Only a hash of
+// the token is stored, so a database leak doesn't expose working links.
+const shareLinkSchema = new mongoose.Schema({
+  user_id: { type: String, required: true, index: true },
+  token_hash: { type: String, required: true, unique: true },
+  label: { type: String, required: true },
+  include_tax: { type: Boolean, default: false },
+  expires_at: { type: Date, required: true },
+  last_viewed_at: Date,
+  views: { type: Number, default: 0 },
+  created_at: { type: Date, default: Date.now },
+});
+// Expired links are removed by MongoDB
+shareLinkSchema.index({ expires_at: 1 }, { expireAfterSeconds: 0 });
+
+// Messages people send from the help page
+const feedbackSchema = new mongoose.Schema({
+  user_id: { type: String, index: true },
+  kind: { type: String, enum: ["idea", "problem", "question"], default: "idea" },
+  message: { type: String, required: true },
+  page: String,
+  status: { type: String, enum: ["new", "seen", "done"], default: "new" },
   created_at: { type: Date, default: Date.now },
 });
 
@@ -121,7 +140,8 @@ const Bill = mongoose.model("Bill", billSchema);
 const CategoryRule = mongoose.model("CategoryRule", categoryRuleSchema);
 const AiNote = mongoose.model("AiNote", aiNoteSchema);
 const Notification = mongoose.model("Notification", notificationSchema);
-const HouseholdLink = mongoose.model("HouseholdLink", householdLinkSchema);
+const ShareLink = mongoose.model("ShareLink", shareLinkSchema);
+const Feedback = mongoose.model("Feedback", feedbackSchema);
 const TaxProfile = mongoose.model("TaxProfile", taxProfileSchema);
 
 export {
@@ -132,6 +152,7 @@ export {
   CategoryRule,
   AiNote,
   Notification,
-  HouseholdLink,
+  ShareLink,
+  Feedback,
   TaxProfile,
 };

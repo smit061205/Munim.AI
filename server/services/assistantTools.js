@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID as uuidv4 } from "node:crypto";
 import { Budget, Transaction } from "../models/Financial.js";
 import { Bill, CategoryRule, Goal } from "../models/Planning.js";
 import { Memory } from "../models/Assistant.js";

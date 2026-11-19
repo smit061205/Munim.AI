@@ -283,6 +283,20 @@ export const buildUpcoming = ({ bills, debts, funds, policies, recurring }, date
     });
   }
 
+  // Advance tax instalments, for people with income that isn't taxed at source
+  for (const [month, day, share] of [[6, 15, 15], [9, 15, 45], [12, 15, 75], [3, 15, 100]]) {
+    const year = Number(date.slice(0, 4)) + (Number(date.slice(5, 7)) > month ? 1 : 0);
+    add({
+      id: `advance-tax-${month}`,
+      kind: "tax",
+      name: `Advance tax: ${share}% of the year's tax due`,
+      amount: null,
+      date: `${year}-${pad(month)}-${pad(day)}`,
+      href: "/plan/tax",
+      expected: true,
+    });
+  }
+
   // Subscriptions the user hasn't already added as a bill
   const billNames = bills.map((bill) => bill.name.toLowerCase());
   for (const item of recurring.filter((row) => row.active && row.subscription)) {

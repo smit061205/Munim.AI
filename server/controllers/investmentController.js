@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID as uuidv4 } from "node:crypto";
 import { Investment } from "../models/Financial.js";
 import { ApiError } from "../middleware/errorHandler.js";
 import {
@@ -17,7 +17,8 @@ const handle = (fn) => async (req, res, next) => {
 };
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const OTHER_KINDS = ["fd", "rd", "ppf", "nps", "sgb", "bond", "other"];
+const OTHER_KINDS = ["fd", "rd", "ppf", "nps", "sgb", "bond", "us_stock", "crypto", "esop", "gold", "other"];
+const LIVE_KINDS = ["us_stock", "crypto", "esop", "gold"];
 
 const number = (value, label, { required = false, min = 0 } = {}) => {
   if (value === undefined || value === null || value === "") {
@@ -212,6 +213,9 @@ const otherFields = (body, existing) => {
     current_value: number(body.current_value, "current value"),
     equity_share: number(body.equity_share, "equity share"),
     grams: number(body.grams, "grams"),
+    symbol: body.symbol === undefined ? undefined : text(body.symbol, 20).toUpperCase(),
+    exchange: body.exchange === undefined ? undefined : body.exchange === "US" ? "US" : "NSE",
+    quantity: number(body.quantity, "quantity"),
     goal_id: body.goal_id === undefined ? undefined : text(body.goal_id, 40) || null,
   });
 
@@ -222,7 +226,13 @@ const otherFields = (body, existing) => {
   if (kind === "rd" && (!merged.monthly_deposit || !merged.rate || !merged.start_date)) {
     throw new ApiError(400, "Enter the monthly deposit, interest rate and start date");
   }
-  if (!["fd", "rd", "bond"].includes(kind) && !merged.current_value) {
+  if (LIVE_KINDS.includes(kind)) {
+    const amount = kind === "gold" ? merged.grams : merged.quantity;
+    if (!amount) throw new ApiError(400, kind === "gold" ? "Enter how many grams you hold" : "Enter how many units you hold");
+    if (kind !== "gold" && !merged.symbol && !merged.current_value) {
+      throw new ApiError(400, "Enter the ticker so the price can be looked up, or its current value");
+    }
+  } else if (!["fd", "rd", "bond"].includes(kind) && !merged.current_value) {
     throw new ApiError(400, "Enter its current value");
   }
   if (merged.equity_share !== undefined && merged.equity_share > 100) {

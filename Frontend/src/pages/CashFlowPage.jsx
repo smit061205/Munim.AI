@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Download, Pencil, Plus, Trash2, Upload, Wand2 } from "lucide-react";
+import { Download, Pencil, Plus, Split, Trash2, Upload, Wand2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
 import { api } from "../lib/api";
@@ -13,7 +13,7 @@ import {
   toDateInput,
 } from "../lib/format";
 import Loaded from "../components/Loaded";
-import { CashFlowChart, SpendingBars } from "../components/charts";
+import { CashFlowChart, MoneyFlow, SpendingBars } from "../components/charts";
 import {
   Badge,
   Button,
@@ -65,6 +65,9 @@ const TransactionModal = ({ transaction, onClose, onSaved }) => {
           ...transaction,
           amount: Math.abs(transaction.amount),
           description: transaction.description || "",
+          account: transaction.account || "",
+          tags: (transaction.tags || []).join(", "),
+          note: transaction.note || "",
         }
       : {
           date: today(),
@@ -73,6 +76,8 @@ const TransactionModal = ({ transaction, onClose, onSaved }) => {
           category: "Groceries",
           description: "",
           account: "",
+          tags: "",
+          note: "",
         },
   );
   const [remember, setRemember] = useState(false);
@@ -97,13 +102,17 @@ const TransactionModal = ({ transaction, onClose, onSaved }) => {
           description: form.description,
           account: form.account,
           amount: Number(form.amount),
+          tags: form.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
+          note: form.note,
           remember: changedCategory && remember,
         };
         const result = transaction
           ? await api(`/transactions/${transaction.id}`, { method: "PUT", body })
           : await api("/transactions", { method: "POST", body: { ...body, category: form.category === "Uncategorised" ? "" : form.category } });
         await onSaved(
-          result.applied
+          result.budgetAlert
+            ? `Added. That takes ${result.budgetAlert.category} past its ${formatMoney(result.budgetAlert.budget)} budget: ${formatMoney(result.budgetAlert.spent)} spent this month.`
+            : result.applied
             ? `Saved. ${result.applied} similar ${result.applied === 1 ? "transaction was" : "transactions were"} moved too.`
             : transaction ? "Transaction updated" : "Transaction added",
         );
@@ -133,6 +142,17 @@ const TransactionModal = ({ transaction, onClose, onSaved }) => {
       <Field label="Description">
         <Input required value={form.description} onChange={set("description")} />
       </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Account or card">
+          <Input value={form.account} onChange={set("account")} placeholder="Optional" />
+        </Field>
+        <Field label="Tags" hint="Separate with commas">
+          <Input value={form.tags} onChange={set("tags")} placeholder="goa-trip, reimbursable" />
+        </Field>
+      </div>
+      <Field label="Note">
+        <Input value={form.note} onChange={set("note")} placeholder="Optional" />
+      </Field>
       {changedCategory && (
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} />
@@ -146,6 +166,84 @@ const TransactionModal = ({ transaction, onClose, onSaved }) => {
   );
 };
 
+// Splits one payment across categories, e.g. a supermarket bill that was
+// partly groceries and partly household things
+const SplitModal = ({ transaction, onClose, onSaved }) => {
+  const total = Math.abs(transaction.amount);
+  const [parts, setParts] = useState([
+    { category: transaction.category, amount: total },
+    { category: "Other", amount: "" },
+  ]);
+  const used = parts.reduce((sum, part) => sum + (Number(part.amount) || 0), 0);
+  const left = Math.round((total - used) * 100) / 100;
+  const update = (index, key, value) =>
+    setParts(parts.map((part, position) => (position === index ? { ...part, [key]: value } : part)));
+
+  return (
+    <FormModal
+      title="Split transaction"
+      description={`${transaction.description || transaction.category}, ${formatMoney(total)}`}
+      submitLabel="Split"
+      onClose={onClose}
+      onSubmit={async () => {
+        if (Math.abs(left) > 0.5) throw new Error(`The parts must add up to ${formatMoney(total)}`);
+        await api(`/transactions/${transaction.id}/split`, {
+          method: "POST",
+          body: { parts: parts.map((part) => ({ category: part.category, amount: Number(part.amount) })) },
+        });
+        await onSaved(`Split into ${parts.length} parts`);
+      }}
+    >
+      {parts.map((part, index) => (
+        <div key={index} className="grid grid-cols-[1fr_8rem] gap-3">
+          <Select aria-label={`Category for part ${index + 1}`} value={part.category} onChange={(event) => update(index, "category", event.target.value)}>
+            {CATEGORIES.filter((category) => category !== "Uncategorised").map((category) => (
+              <option key={category}>{category}</option>
+            ))}
+          </Select>
+          <Input aria-label={`Amount for part ${index + 1}`} type="number" min="0.01" step="any" required value={part.amount} onChange={(event) => update(index, "amount", event.target.value)} />
+        </div>
+      ))}
+      <div className="flex items-center justify-between text-sm">
+        <Button type="button" size="sm" variant="secondary" disabled={parts.length >= 10} onClick={() => setParts([...parts, { category: "Other", amount: left > 0 ? left : "" }])}>
+          <Plus size={14} /> Add part
+        </Button>
+        <span className={`tnum ${Math.abs(left) > 0.5 ? "text-loss" : "text-muted"}`}>
+          {Math.abs(left) > 0.5 ? `${formatMoney(Math.abs(left))} ${left > 0 ? "left to assign" : "too much"}` : "Adds up"}
+        </span>
+      </div>
+    </FormModal>
+  );
+};
+
+// Spending grouped by who it went to, using the first words of the description
+const merchantOf = (description = "") =>
+  description.toLowerCase().replace(/upi\/|pos |neft |imps |\d{4,}|[^a-z ]/g, " ").trim().split(/\s+/).slice(0, 2).join(" ") || "unknown";
+
+const Merchants = ({ rows }) => {
+  const groups = new Map();
+  for (const row of rows.filter((item) => item.type === "expense")) {
+    const key = merchantOf(row.description);
+    const group = groups.get(key) || { key, name: row.description || "No description", total: 0, count: 0 };
+    group.total += Math.abs(row.amount);
+    group.count += 1;
+    groups.set(key, group);
+  }
+  const top = [...groups.values()].sort((a, b) => b.total - a.total).slice(0, 12);
+  if (!top.length) return <EmptyState title="No spending matches these filters" />;
+  return (
+    <ul className="divide-y divide-line">
+      {top.map((group) => (
+        <li key={group.key} className="flex items-center justify-between gap-4 px-5 py-2.5">
+          <span className="min-w-0 flex-1 truncate capitalize">{group.key}</span>
+          <span className="text-sm text-muted shrink-0">{group.count} {group.count === 1 ? "payment" : "payments"}</span>
+          <span className="tnum shrink-0 w-28 text-right">{formatMoney(group.total)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+};
+
 const TransactionsTab = () => {
   const { user } = useAuth();
   const { refresh } = useData();
@@ -156,6 +254,9 @@ const TransactionsTab = () => {
   const [query, setQuery] = useState(params.get("q") || "");
   const [type, setType] = useState("all");
   const [category, setCategory] = useState("all");
+  const [account, setAccount] = useState("all");
+  const [byMerchant, setByMerchant] = useState(false);
+  const [splitting, setSplitting] = useState(null);
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState(null);
   const [removing, setRemoving] = useState(null);
@@ -191,20 +292,26 @@ const TransactionsTab = () => {
     [rows],
   );
 
+  const accounts = useMemo(
+    () => [...new Set((rows || []).map((row) => row.account).filter(Boolean))].sort(),
+    [rows],
+  );
+
   const filtered = useMemo(() => {
-    const term = query.trim().toLowerCase();
+    const term = query.trim().toLowerCase().replace(/^#/, "");
     return (rows || [])
       .filter(
         (row) =>
           (type === "all" || row.type === type) &&
           (category === "all" || row.category === category) &&
+          (account === "all" || row.account === account) &&
           (!term ||
-            `${row.description} ${row.category}`.toLowerCase().includes(term)),
+            `${row.description} ${row.category} ${(row.tags || []).join(" ")} ${row.note || ""}`.toLowerCase().includes(term)),
       )
       .sort((a, b) => b.date.localeCompare(a.date));
-  }, [rows, query, type, category]);
+  }, [rows, query, type, category, account]);
 
-  useEffect(() => setPage(1), [query, type, category]);
+  useEffect(() => setPage(1), [query, type, category, account]);
 
   const visible = filtered.slice(0, page * PAGE_SIZE);
 
@@ -237,13 +344,16 @@ const TransactionsTab = () => {
     downloadFile(
       "munim-transactions.csv",
       toCsv([
-        ["Date", "Description", "Category", "Type", "Amount"],
+        ["Date", "Description", "Category", "Type", "Amount", "Account", "Tags", "Note"],
         ...filtered.map((row) => [
           row.date,
           row.description,
           row.category,
           row.type,
           row.amount,
+          row.account || "",
+          (row.tags || []).join(" "),
+          row.note || "",
         ]),
       ]),
     );
@@ -256,7 +366,7 @@ const TransactionsTab = () => {
     <>
       <div className="flex flex-col @3xl:flex-row gap-2 mb-4">
         <Input
-          placeholder="Search transactions"
+          placeholder="Search, or a #tag"
           aria-label="Search transactions"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
@@ -273,7 +383,18 @@ const TransactionsTab = () => {
             <option key={name}>{name}</option>
           ))}
         </Select>
+        {accounts.length > 0 && (
+          <Select aria-label="Filter by account" value={account} onChange={(event) => setAccount(event.target.value)} className="@3xl:w-40">
+            <option value="all">All accounts</option>
+            {accounts.map((name) => (
+              <option key={name}>{name}</option>
+            ))}
+          </Select>
+        )}
         <div className="flex flex-wrap gap-2 @3xl:ml-auto">
+          <Button variant="secondary" aria-pressed={byMerchant} onClick={() => setByMerchant(!byMerchant)}>
+            {byMerchant ? "Show transactions" : "Group by merchant"}
+          </Button>
           <Link to="/money/rules" className="inline-flex items-center gap-2 h-9 px-3 rounded-lg text-sm font-medium text-muted hover:text-ink hover:bg-wash">
             <Wand2 size={16} /> Rules
           </Link>
@@ -291,7 +412,9 @@ const TransactionsTab = () => {
       </div>
 
       <Card>
-        {filtered.length === 0 ? (
+        {byMerchant ? (
+          <Merchants rows={filtered} />
+        ) : filtered.length === 0 ? (
           rows.length === 0 ? (
             <EmptyState
               title="No transactions yet"
@@ -318,7 +441,14 @@ const TransactionsTab = () => {
                     <td className="px-5 py-2.5 tnum text-muted whitespace-nowrap">
                       {formatDate(row.date, user.preferences?.dateFormat)}
                     </td>
-                    <td className="px-3 py-2.5">{row.description || "No description"}</td>
+                    <td className="px-3 py-2.5">
+                      {row.description || "No description"}
+                      {(row.tags?.length > 0 || row.note || row.account) && (
+                        <span className="block text-xs text-muted mt-0.5">
+                          {[row.account, ...(row.tags || []).map((tag) => `#${tag}`), row.note].filter(Boolean).join("  ")}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-3 py-2.5 text-muted">{row.category}</td>
                     <td className={`px-3 py-2.5 text-right tnum whitespace-nowrap ${row.type === "income" ? "text-gain" : ""}`}>
                       {row.type === "income" ? "+" : "-"}
@@ -328,6 +458,9 @@ const TransactionsTab = () => {
                       <div className="flex justify-end gap-0.5">
                         <IconButton label="Edit transaction" onClick={() => setEditing(row)}>
                           <Pencil size={15} />
+                        </IconButton>
+                        <IconButton label="Split transaction" onClick={() => setSplitting(row)}>
+                          <Split size={15} />
                         </IconButton>
                         <IconButton label="Delete transaction" onClick={() => setRemoving(row)}>
                           <Trash2 size={15} />
@@ -344,9 +477,9 @@ const TransactionsTab = () => {
 
       <div className="flex items-center justify-between mt-3 text-sm text-muted">
         <span className="tnum">
-          Showing {visible.length} of {filtered.length}
+          {byMerchant ? `Grouped from ${filtered.length} transactions` : `Showing ${visible.length} of ${filtered.length}`}
         </span>
-        {visible.length < filtered.length && (
+        {!byMerchant && visible.length < filtered.length && (
           <Button variant="secondary" size="sm" onClick={() => setPage(page + 1)}>
             Show more
           </Button>
@@ -359,6 +492,9 @@ const TransactionsTab = () => {
           onSaved={afterChange}
           onClose={() => setEditing(null)}
         />
+      )}
+      {splitting && (
+        <SplitModal transaction={splitting} onSaved={afterChange} onClose={() => setSplitting(null)} />
       )}
       {removing && (
         <ConfirmModal
@@ -597,7 +733,7 @@ const RecurringTab = ({ recurring }) => {
   );
 };
 
-const KIND_LABELS = { bill: "Bill", emi: "EMI", sip: "SIP", insurance: "Insurance", subscription: "Subscription" };
+const KIND_LABELS = { bill: "Bill", emi: "EMI", sip: "SIP", insurance: "Insurance", subscription: "Subscription", tax: "Tax" };
 
 const BillModal = ({ onClose }) => {
   const { refresh } = useData();
@@ -787,7 +923,7 @@ const RulesTab = () => {
   );
 };
 
-const Activity = ({ cashflow, spending }) => (
+const Activity = ({ cashflow, spending, flow }) => (
   <>
     <StatStrip>
       <Stat label="Income this month" value={formatMoney(cashflow.thisMonth.income)} />
@@ -811,6 +947,13 @@ const Activity = ({ cashflow, spending }) => (
       </Card>
     </div>
 
+    {flow && (
+      <Card className="p-5 mb-10">
+        <SectionTitle title="How money moved" description="Income on the left, where it went on the right. Last 90 days." />
+        <MoneyFlow flow={flow} />
+      </Card>
+    )}
+
     <h2 className="text-lg font-semibold mb-4">Transactions</h2>
     <TransactionsTab />
   </>
@@ -819,9 +962,9 @@ const Activity = ({ cashflow, spending }) => (
 export default function CashFlowPage({ view = "activity" }) {
   return (
     <Loaded>
-      {({ cashflow, spending, budgets, recurring, upcoming }) => (
+      {({ cashflow, spending, budgets, recurring, upcoming, flow }) => (
         <>
-          {view === "activity" && <Activity cashflow={cashflow} spending={spending} />}
+          {view === "activity" && <Activity cashflow={cashflow} spending={spending} flow={flow} />}
           {view === "budgets" && <BudgetsTab budgets={budgets} />}
           {view === "bills" && (
             <div className="space-y-6">

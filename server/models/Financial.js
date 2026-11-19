@@ -59,8 +59,12 @@ const liabilityItemSchema = new mongoose.Schema({
       "credit_card",
     ],
   },
+  name: String,
   remaining_balance: { type: Number, default: 0 },
   monthly_payment: { type: Number, default: 0 },
+  // Credit cards only
+  credit_limit: Number,
+  statement_day: { type: Number, min: 1, max: 31 },
   interest_rate: Number,
   loan_term_months: Number,
   due_day: { type: Number, min: 1, max: 31 },
@@ -86,6 +90,11 @@ const transactionItemSchema = new mongoose.Schema({
   category_source: { type: String, enum: ["user", "rule", "ai", "import"] },
   description: String,
   account: String,
+  // The user's own labels and a note, e.g. "trip-goa", "reimbursable"
+  tags: { type: [String], default: undefined },
+  note: String,
+  // Set on the parts of a transaction that was split across categories
+  split_from: String,
   created_at: { type: Date, default: Date.now },
 });
 
@@ -195,7 +204,7 @@ const otherInvestmentSchema = new mongoose.Schema({
   id: String,
   kind: {
     type: String,
-    enum: ["fd", "rd", "ppf", "nps", "sgb", "bond", "other"],
+    enum: ["fd", "rd", "ppf", "nps", "sgb", "bond", "us_stock", "crypto", "esop", "gold", "other"],
     required: true,
   },
   name: String,
@@ -211,6 +220,12 @@ const otherInvestmentSchema = new mongoose.Schema({
   // Share of an NPS account in equity; the rest counts as debt
   equity_share: { type: Number, min: 0, max: 100 },
   grams: Number,
+  // Live-priced holdings: US shares, crypto, ESOPs or RSUs, and gold
+  symbol: String,
+  exchange: { type: String, enum: ["NSE", "US"] },
+  quantity: Number,
+  price: Number,
+  price_date: String,
   goal_id: String,
   created_at: { type: Date, default: Date.now },
 });

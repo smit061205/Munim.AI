@@ -75,6 +75,8 @@ const userSchema = new mongoose.Schema({
     checklistHidden: { type: Boolean, default: false }
   },
   digestSentWeek: String,
+  // The IST day this user's reminders were last refreshed by the daily job
+  remindersSyncedOn: String,
   hasSampleData: {
     type: Boolean,
     default: false

@@ -3,7 +3,7 @@ import User from "../models/User.js";
 import { ApiError } from "../middleware/errorHandler.js";
 import { signToken } from "../middleware/auth.js";
 import UserPermissions from "../models/UserPermissions.js";
-import { AiNote, Notification, TaxProfile } from "../models/Planning.js";
+import { AiNote, Notification, ShareLink, TaxProfile } from "../models/Planning.js";
 import {
   clearFinancialData,
   hasFinancialData,
@@ -14,6 +14,7 @@ import {
   assessAnswers,
 } from "../services/investorProfileService.js";
 import { clearAssistantData } from "./assistantController.js";
+import { sendVerificationEmail } from "./authEmailController.js";
 
 const BCRYPT_ROUNDS = 12;
 const MIN_PASSWORD_LENGTH = 8;
@@ -38,6 +39,7 @@ export const toPublicUser = (user) => ({
   createdAt: user.createdAt,
   preferences: user.preferences,
   hasSampleData: !!user.hasSampleData,
+  emailVerified: !!user.emailVerified,
   investorProfile: user.investorProfile?.riskProfile
     ? user.investorProfile
     : null,
@@ -100,6 +102,8 @@ export const registerUser = async (req, res, next) => {
 
     const userId = user._id.toString();
     await UserPermissions.getUserPermissions(userId);
+    // A failed email shouldn't block sign-up; it can be resent from the app
+    await sendVerificationEmail(user).catch((error) => console.error("Verification email failed:", error.message));
 
     res.status(201).json({
       success: true,
@@ -322,6 +326,7 @@ export const deleteAccount = async (req, res, next) => {
       Notification.deleteMany({ user_id: userId }),
       AiNote.deleteMany({ user_id: userId }),
       TaxProfile.deleteMany({ user_id: userId }),
+      ShareLink.deleteMany({ user_id: userId }),
     ]);
     await user.deleteOne();
     res.json({ success: true });

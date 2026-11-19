@@ -1,6 +1,7 @@
 import express from "express";
 import multer from "multer";
 import rateLimit from "express-rate-limit";
+import { MongoStore } from "../middleware/rateLimitStore.js";
 import {
   decideAction,
   deleteConversation,
@@ -30,6 +31,7 @@ const upload = multer({
 
 // Stops a burst of messages; the daily and monthly limits cover the long run
 const burstLimiter = rateLimit({
+  store: new MongoStore("assistant"),
   windowMs: 60 * 1000,
   limit: () => getLimits().perMinuteMessages,
   keyGenerator: (req) => req.auth.userId,

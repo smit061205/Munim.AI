@@ -111,10 +111,10 @@ const STOCKS = [
 
 // Monthly SIPs for three years, at a NAV that grew at a steady-ish rate
 const FUNDS = [
-  { scheme_name: "Nifty 50 Index Fund", scheme_code: "SAMPLE-IDX", category: "Index", sip: 8000, growth: 0.13, nav: 42.6, goal: "Retirement" },
-  { scheme_name: "Flexi Cap Fund", scheme_code: "SAMPLE-FLX", category: "Equity", sip: 7000, growth: 0.15, nav: 78.4, goal: "Child's education", sold: 2 },
-  { scheme_name: "Short Duration Debt Fund", scheme_code: "SAMPLE-DBT", category: "Debt", sip: 8000, growth: 0.07, nav: 31.2 },
-  { scheme_name: "Gold ETF Fund of Fund", scheme_code: "SAMPLE-GLD", category: "Gold", sip: 2000, growth: 0.11, nav: 34.1 },
+  { scheme_name: "Nifty 50 Index Fund - Direct Plan", scheme_code: "SAMPLE-IDX", category: "Index", sip: 8000, growth: 0.13, nav: 42.6, goal: "Retirement" },
+  { scheme_name: "Flexi Cap Fund - Regular Plan", scheme_code: "SAMPLE-FLX", category: "Equity", sip: 7000, growth: 0.15, nav: 78.4, goal: "Child's education", sold: 2 },
+  { scheme_name: "Short Duration Debt Fund - Direct Plan", scheme_code: "SAMPLE-DBT", category: "Debt", sip: 8000, growth: 0.07, nav: 31.2 },
+  { scheme_name: "Gold ETF Fund of Fund - Direct Plan", scheme_code: "SAMPLE-GLD", category: "Gold", sip: 2000, growth: 0.11, nav: 34.1 },
 ];
 const SIP_MONTHS = 36;
 
@@ -226,7 +226,7 @@ const buildBudgets = () => {
 };
 
 // A plausible past path that ends at today's value
-const buildSnapshots = (userId, currentValue) => {
+const buildSnapshots = (userId, currentValue, portfolioValue, investedValue) => {
   const snapshots = [];
   for (let back = 12; back >= 1; back -= 1) {
     const date = new Date();
@@ -237,6 +237,8 @@ const buildSnapshots = (userId, currentValue) => {
       value: Math.round(
         currentValue * (1 - back * 0.012) + randomBetween(-40000, 40000),
       ),
+      portfolio: Math.round(portfolioValue * (1 - back * 0.018) + randomBetween(-20000, 20000)),
+      invested: Math.round(investedValue * (1 - back * 0.015)),
     });
   }
   return snapshots;
@@ -277,7 +279,7 @@ export const loadSampleData = async (userId) => {
   ];
   const liabilities = [
     { id: shortId("lib"), type: "home_loan", remaining_balance: 4150000, monthly_payment: 38500, interest_rate: 8.6, loan_term_months: 216, due_day: 5 },
-    { id: shortId("lib"), type: "credit_card", remaining_balance: 38000, monthly_payment: 6000, interest_rate: 36, due_day: 18 },
+    { id: shortId("lib"), type: "credit_card", name: "HDFC Millennia", credit_limit: 200000, statement_day: 28, remaining_balance: 38000, monthly_payment: 6000, interest_rate: 36, due_day: 18 },
   ];
   const epf = {
     uan: `SAMPLE-${shortId("uan")}`,
@@ -325,7 +327,9 @@ export const loadSampleData = async (userId) => {
     portfolio.other.reduce((sum, item) => sum + (item.current_value || item.principal || 0), 0) +
     epf.total_balance -
     liabilities.reduce((sum, item) => sum + item.remaining_balance, 0);
-  await NetWorthSnapshot.insertMany(buildSnapshots(userId, currentValue));
+  const portfolioValue =
+    portfolio.total_value + portfolio.other.reduce((sum, item) => sum + (item.current_value || item.principal || 0), 0);
+  await NetWorthSnapshot.insertMany(buildSnapshots(userId, currentValue, portfolioValue, portfolioValue * 0.82));
 };
 
 // Removes every financial record the user has

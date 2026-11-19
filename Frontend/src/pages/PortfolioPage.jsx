@@ -5,7 +5,7 @@ import { useData } from "../context/DataContext";
 import { api } from "../lib/api";
 import { formatDayMonth, formatMoney, formatPercent, humanize } from "../lib/format";
 import Loaded from "../components/Loaded";
-import { AllocationCompare } from "../components/charts";
+import { AllocationCompare, NetWorthChart } from "../components/charts";
 import {
   Badge,
   Button,
@@ -37,8 +37,15 @@ const OTHER_KINDS = [
   { value: "nps", label: "NPS" },
   { value: "sgb", label: "Sovereign gold bond" },
   { value: "bond", label: "Bond" },
+  { value: "us_stock", label: "US shares" },
+  { value: "esop", label: "ESOPs or RSUs" },
+  { value: "crypto", label: "Crypto" },
+  { value: "gold", label: "Gold (physical or digital)" },
   { value: "other", label: "Other" },
 ];
+
+// Priced every day from the market rather than by rate or by hand
+const LIVE_KINDS = ["us_stock", "esop", "crypto", "gold"];
 
 const GoalSelect = ({ goals, value, onChange }) => (
   <Field label="Counts towards goal">
@@ -277,10 +284,14 @@ const OtherModal = ({ item, goals, onClose }) => {
     current_value: raw.current_value ?? "",
     equity_share: raw.equity_share ?? "",
     grams: raw.grams ?? "",
+    symbol: raw.symbol || "",
+    exchange: raw.exchange || "NSE",
+    quantity: raw.quantity ?? "",
     goal_id: raw.goal_id || "",
   });
   const set = (key) => (event) => setForm({ ...form, [key]: event.target.value });
   const byRate = ["fd", "rd", "bond"].includes(form.kind);
+  const live = LIVE_KINDS.includes(form.kind);
 
   const submit = async () => {
     const body = Object.fromEntries(
@@ -294,7 +305,7 @@ const OtherModal = ({ item, goals, onClose }) => {
 
   return (
     <FormModal
-      title={item ? "Edit investment" : "Add deposit, PPF, NPS or bond"}
+      title={item ? "Edit investment" : "Add another investment"}
       submitLabel={item ? "Save changes" : "Add investment"}
       onSubmit={submit}
       onClose={onClose}
@@ -314,7 +325,45 @@ const OtherModal = ({ item, goals, onClose }) => {
           <Input value={form.institution} onChange={set("institution")} />
         </Field>
       </div>
-      {byRate ? (
+      {live ? (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            {form.kind === "gold" ? (
+              <Field label="Grams">
+                <Input required type="number" min="0" step="any" value={form.grams} onChange={set("grams")} />
+              </Field>
+            ) : (
+              <>
+                <Field label={form.kind === "crypto" ? "Coin, e.g. BTC" : "Ticker, e.g. AAPL"}>
+                  <Input value={form.symbol} onChange={set("symbol")} placeholder="Optional" />
+                </Field>
+                <Field label="Units held">
+                  <Input required type="number" min="0" step="any" value={form.quantity} onChange={set("quantity")} />
+                </Field>
+              </>
+            )}
+            {form.kind === "esop" && (
+              <Field label="Listed on">
+                <Select value={form.exchange} onChange={set("exchange")}>
+                  <option value="NSE">NSE</option>
+                  <option value="US">A US exchange</option>
+                </Select>
+              </Field>
+            )}
+            <Field label="Amount paid">
+              <Input type="number" min="0" value={form.principal} onChange={set("principal")} placeholder="Optional" />
+            </Field>
+            <Field label="Current value">
+              <Input type="number" min="0" value={form.current_value} onChange={set("current_value")} placeholder={form.kind === "gold" ? "Worked out daily" : "If there's no ticker"} />
+            </Field>
+          </div>
+          <p className="text-sm text-muted">
+            {form.kind === "gold"
+              ? "Valued every day at the international gold price in rupees."
+              : "With a ticker, the price updates every day in rupees. Without one, enter the value yourself."}
+          </p>
+        </>
+      ) : byRate ? (
         <>
           <div className="grid grid-cols-2 gap-3">
             {form.kind === "rd" ? (
@@ -662,6 +711,73 @@ const ReturnsCard = ({ returns, pricesAsOf, onRefresh, refreshing }) => {
   );
 };
 
+// Costs that can be cut and places where too much sits together
+const XrayCard = ({ xray }) => {
+  if (!xray) return null;
+  const findings = [
+    xray.regular.length > 0 && {
+      tone: "warn",
+      title: `${xray.regular.length} ${xray.regular.length === 1 ? "fund is a regular plan" : "funds are regular plans"}`,
+      text: `Regular plans pay a distributor out of your money every year. Switching to the direct plan of the same fund could save about ${formatMoney(xray.regularYearlyCost)} a year. Switching counts as selling, so check the tax and exit load first.`,
+      items: xray.regular.map((fund) => `${fund.name}: about ${formatMoney(fund.yearlyCost)} a year`),
+    },
+    ...xray.overlaps.map((overlap) => ({
+      tone: "warn",
+      title: `${overlap.funds.length} ${overlap.style} funds`,
+      text: `Funds of the same style mostly hold the same companies, so together they add little spread. ${formatMoney(overlap.value)} sits across them.`,
+      items: overlap.funds,
+    })),
+    ...xray.concentration.map((text) => ({ tone: "warn", title: "Concentrated", text })),
+    xray.exitLoad.length > 0 && {
+      tone: "neutral",
+      title: "Exit load on recent purchases",
+      text: "Most equity funds charge 1% on units sold within a year of buying them.",
+      items: xray.exitLoad.map((fund) => `${fund.name}: ${formatMoney(fund.value)} bought in the last year; the first of it is free from ${formatDayMonth(fund.freeFrom)}`),
+    },
+  ].filter(Boolean);
+
+  return (
+    <Card className="p-5 mb-6">
+      <SectionTitle title="Portfolio X-ray" description="Costs, overlap and concentration, worked out from fund names and your purchases." />
+      {findings.length === 0 ? (
+        <p className="text-muted">Nothing stands out. Your funds are direct plans, spread across styles, with no single holding dominating.</p>
+      ) : (
+        <ul className="space-y-4">
+          {findings.map((finding) => (
+            <li key={finding.title}>
+              <p className="font-medium flex items-center gap-2">
+                {finding.title} <Badge tone={finding.tone}>{finding.tone === "warn" ? "Worth a look" : "Good to know"}</Badge>
+              </p>
+              <p className="text-sm text-muted">{finding.text}</p>
+              {finding.items?.length > 0 && (
+                <ul className="text-sm mt-1 list-disc pl-5 space-y-0.5">
+                  {finding.items.map((item) => <li key={item}>{item}</li>)}
+                </ul>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {xray.byHouse.length > 1 && (
+        <div className="mt-5">
+          <p className="text-sm font-medium mb-2">By fund house</p>
+          <div className="space-y-1.5">
+            {xray.byHouse.map((house) => (
+              <div key={house.name} className="flex items-center gap-3 text-sm">
+                <span className="w-40 truncate">{house.name}</span>
+                <span className="flex-1 h-2 rounded-full bg-wash overflow-hidden">
+                  <span className="block h-full bg-accent rounded-full" style={{ width: `${house.percent}%` }} />
+                </span>
+                <span className="tnum w-10 text-right text-muted">{house.percent}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+};
+
 export default function PortfolioPage() {
   const { user } = useAuth();
   const { refresh } = useData();
@@ -690,7 +806,8 @@ export default function PortfolioPage() {
 
   return (
     <Loaded>
-      {({ portfolio, retirement, cashflow, goals }) => {
+      {({ portfolio, retirement, cashflow, goals, netWorth }) => {
+        const valueHistory = netWorth.history.filter((row) => typeof row.portfolio === "number");
         const goalName = Object.fromEntries(goals.map((goal) => [goal.id, goal.name]));
         return (
           <>
@@ -720,6 +837,13 @@ export default function PortfolioPage() {
                 )}
               </Stat>
             </StatStrip>
+
+            {valueHistory.length >= 2 && (
+              <Card className="p-5 mb-6">
+                <SectionTitle title="Value over time" description="Saved once a day, so it fills in as you use Munim." />
+                <NetWorthChart history={valueHistory} valueKey="portfolio" label="Value" extra={{ key: "invested", label: "Invested" }} />
+              </Card>
+            )}
 
             <div className="grid @3xl:grid-cols-2 gap-6 mb-6">
               <ReturnsCard returns={portfolio.returns} pricesAsOf={portfolio.pricesAsOf} onRefresh={refreshPrices} refreshing={refreshing} />
@@ -765,6 +889,8 @@ export default function PortfolioPage() {
                 )}
               </Card>
             </div>
+
+            <XrayCard xray={portfolio.xray} />
 
             {portfolio.rebalance && (
               <RebalancePlan plan={portfolio.rebalance} monthlySavings={cashflow.forecast.monthlySavings} />
@@ -841,7 +967,7 @@ export default function PortfolioPage() {
                     Stock or mutual fund
                   </Button>
                   <Button variant="secondary" className="!justify-start" onClick={() => { setAdding(false); setEditingOther("new"); }}>
-                    FD, RD, PPF, NPS, gold bond or bond
+                    Deposits, PPF, NPS, bonds, gold, US shares, ESOPs or crypto
                   </Button>
                 </div>
               </Modal>

@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import RiskProfileSummary from "../components/RiskProfileSummary";
-import { Logo } from "../components/AppLayout";
+import { Logo } from "../components/Logo";
 import { primaryButtonClassName } from "../components/AuthShell";
 
 const OnboardingPage = () => {

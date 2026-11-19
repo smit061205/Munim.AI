@@ -27,6 +27,61 @@ const GAIN_TYPES = {
   slab: "Taxed at your slab",
 };
 
+// One row per sale, in the order the ITR's capital gains schedule asks for
+const downloadGains = (capitalGains) => {
+  const header = ["Holding", "Type", "Bought on", "Sold on", "Units", "Cost of acquisition", "Sale value", "Gain"];
+  const rows = capitalGains.sales.map((sale) => [
+    sale.holding, GAIN_TYPES[sale.type], sale.boughtOn, sale.soldOn, sale.units, sale.cost, sale.proceeds, sale.gain,
+  ]);
+  const csv = [header, ...rows]
+    .map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  const link = Object.assign(document.createElement("a"), { href: url, download: `capital-gains-FY${capitalGains.fy}.csv` });
+  link.click();
+  URL.revokeObjectURL(url);
+};
+
+// Instalments fall on the 15th of June, September, December and March
+const ADVANCE_TAX = [
+  { month: 6, label: "15 June", share: 15 },
+  { month: 9, label: "15 September", share: 45 },
+  { month: 12, label: "15 December", share: 75 },
+  { month: 3, label: "15 March", share: 100 },
+];
+
+const AdvanceTax = ({ fy, total }) => {
+  const startYear = Number(String(fy).slice(0, 4));
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = ADVANCE_TAX.map((row) => {
+    const year = row.month === 3 ? startYear + 1 : startYear;
+    return { ...row, date: `${year}-${String(row.month).padStart(2, "0")}-15`, amount: Math.round((total * row.share) / 100) };
+  });
+  const next = rows.find((row) => row.date >= today);
+  return (
+    <Card className="p-5 mb-6">
+      <SectionTitle
+        title="Advance tax"
+        description="Due if more than ₹10,000 of your tax isn't deducted at source, for example on capital gains, rent or freelance income."
+      />
+      <ul className="divide-y divide-line">
+        {rows.map((row) => (
+          <li key={row.label} className="flex items-center justify-between gap-4 py-2">
+            <span className="flex items-center gap-2">
+              {row.label}
+              {row === next && <Badge tone="warn">Next</Badge>}
+            </span>
+            <span className="text-sm text-muted tnum">
+              {row.share}% paid by then{total > 0 ? `, about ${formatMoney(row.amount)} in all` : ""}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="text-sm text-muted mt-3">Amounts are the share of this page's estimate, before any tax your employer deducts. Missing a date adds 1% interest a month on the shortfall.</p>
+    </Card>
+  );
+};
+
 const ProfileModal = ({ fy, profile, onSaved, onClose }) => {
   const toast = useToast();
   const [form, setForm] = useState({
@@ -215,7 +270,11 @@ export default function TaxPage() {
       </div>
 
       <Card className="p-5 mb-6">
-        <SectionTitle title="Capital gains this year" description={`Long-term equity gains up to ${formatMoney(capitalGains.exemption.limit)} a year are tax-free.`} />
+        <SectionTitle title="Capital gains this year" description={`Long-term equity gains up to ${formatMoney(capitalGains.exemption.limit)} a year are tax-free.`}>
+          {capitalGains.sales.length > 0 && (
+            <Button size="sm" variant="secondary" onClick={() => downloadGains(capitalGains)}>Download for ITR</Button>
+          )}
+        </SectionTitle>
         <div className="grid grid-cols-2 @3xl:grid-cols-4 gap-4 mb-5">
           {Object.entries(GAIN_TYPES).map(([key, label]) => (
             <Stat key={key} label={label} value={formatMoney(capitalGains.totals[key])} />
@@ -248,6 +307,8 @@ export default function TaxPage() {
           <p className="text-muted">No sales this year. Record sales on the <Link to="/wealth/investments" className="underline">Investments</Link> page or import a statement.</p>
         )}
       </Card>
+
+      <AdvanceTax fy={summary.fy} total={regimes[regimes.better].total} />
 
       <div className="grid @3xl:grid-cols-2 gap-6">
         <Card className="p-5">

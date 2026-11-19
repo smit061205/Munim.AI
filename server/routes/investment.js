@@ -1,6 +1,7 @@
 import express from "express";
 import multer from "multer";
 import rateLimit from "express-rate-limit";
+import { MongoStore } from "../middleware/rateLimitStore.js";
 import {
   getInvestments,
   createInvestment,
@@ -44,6 +45,7 @@ const acceptStatement = (req, res, next) =>
 
 // Password guessing against a statement is the risk here
 const statementLimiter = rateLimit({
+  store: new MongoStore("statements"),
   windowMs: 60 * 1000,
   limit: 10,
   keyGenerator: (req) => req.auth.userId,

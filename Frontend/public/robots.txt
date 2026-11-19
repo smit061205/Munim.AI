@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /shared/
+
+Sitemap: https://munim-ai.vercel.app/sitemap.xml

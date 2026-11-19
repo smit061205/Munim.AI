@@ -151,7 +151,10 @@ export const otherInvestmentTrades = (item, date = todayKey()) => {
 
 // Which part of the target mix it counts towards: [equity, debt, gold] shares
 export const otherInvestmentSplit = (item) => {
-  if (item.kind === "sgb") return { equity: 0, debt: 0, gold: 1 };
+  if (item.kind === "sgb" || item.kind === "gold") return { equity: 0, debt: 0, gold: 1 };
+  // Crypto has no slot in the target mix, so it counts with equity as the
+  // nearest in risk
+  if (["us_stock", "esop", "crypto"].includes(item.kind)) return { equity: 1, debt: 0, gold: 0 };
   if (item.kind === "nps") {
     const equity = Math.min(Math.max(Number(item.equity_share) || 50, 0), 100) / 100;
     return { equity, debt: 1 - equity, gold: 0 };

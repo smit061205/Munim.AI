@@ -219,8 +219,10 @@ export const toYahooSymbol = (text = "") => {
 };
 
 // The latest price, delayed by about 15 minutes during market hours
-export const getQuote = async (text) => {
-  const { symbol, name } = toYahooSymbol(text);
+// `raw` uses the symbol exactly as given, for US shares, crypto pairs,
+// currencies and futures
+export const getQuote = async (text, { raw = false } = {}) => {
+  const { symbol, name } = raw ? { symbol: text.trim().toUpperCase(), name: text.trim().toUpperCase() } : toYahooSymbol(text);
   const cached = quoteCache.get(symbol);
   if (cached && Date.now() - cached.loadedAt < QUOTE_TTL_MS) return cached.quote;
 
@@ -304,4 +306,26 @@ export const getEquityList = async () => {
   }
   equityCache = { byIsin, loadedAt: Date.now() };
   return equityCache;
+};
+
+const GRAMS_PER_TROY_OUNCE = 31.1035;
+
+// Today's price in rupees for a holding outside Indian markets. Gold uses the
+// international spot price, before Indian import duty and GST.
+export const priceInInr = async (item) => {
+  const usdInr = async () => (await getQuote("USDINR=X", { raw: true })).price;
+  if (item.kind === "gold") {
+    const [ounce, rate] = await Promise.all([getQuote("GC=F", { raw: true }), usdInr()]);
+    return { price: (ounce.price * rate) / GRAMS_PER_TROY_OUNCE, asOf: ounce.asOf };
+  }
+  if (item.kind === "crypto") {
+    const quote = await getQuote(`${item.symbol}-INR`, { raw: true });
+    return { price: quote.price, asOf: quote.asOf };
+  }
+  if (item.kind === "us_stock" || (item.kind === "esop" && item.exchange === "US")) {
+    const [quote, rate] = await Promise.all([getQuote(item.symbol, { raw: true }), usdInr()]);
+    return { price: quote.price * (quote.currency === "USD" ? rate : 1), asOf: quote.asOf };
+  }
+  const quote = await getQuote(item.symbol);
+  return { price: quote.price, asOf: quote.asOf };
 };

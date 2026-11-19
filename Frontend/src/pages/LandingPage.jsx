@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { useReducedMotion } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
-import { Logo } from "../components/AppLayout";
+import { Logo } from "../components/Logo";
 
 const Shell = ({ className = "", children, id }) => (
   <section id={id} className={`px-4 lg:px-8 ${className}`}>
@@ -514,7 +514,13 @@ export default function LandingPage() {
       </main>
 
       <footer className="max-w-6xl mx-auto px-4 lg:px-8 py-10 flex flex-col md:flex-row justify-between gap-6 text-sm text-muted">
-        <Logo className="text-base text-ink" />
+        <div className="space-y-2">
+          <Logo className="text-base text-ink" />
+          <p className="flex gap-4">
+            <Link to="/privacy" className="hover:text-ink">Privacy</Link>
+            <Link to="/terms" className="hover:text-ink">Terms</Link>
+          </p>
+        </div>
         <p className="max-w-2xl md:text-right">
           Munim.AI helps you understand your finances. It is not a SEBI-registered adviser and does not give personal investment advice. Investments carry risk, including loss of capital.
         </p>

@@ -8,6 +8,7 @@ import {
   createRule,
   deleteRule,
   recategorize,
+  splitTransaction,
 } from "../controllers/transactionController.js";
 import { requireAuth } from "../middleware/auth.js";
 
@@ -25,6 +26,7 @@ router.post("/recategorize", recategorize);
 router.get("/", getTransactions);
 router.post("/", createTransaction);
 router.put("/:transactionId", updateTransaction);
+router.post("/:transactionId/split", splitTransaction);
 router.delete("/:transactionId", deleteTransaction);
 
 export default router;

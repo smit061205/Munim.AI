@@ -5,8 +5,9 @@ const normaliseApiUrl = (url) => {
   return trimmed.endsWith("/api") ? trimmed : `${trimmed}/api`;
 };
 
+// In production the API is served from the same address as the app
 export const API_URL = normaliseApiUrl(
-  import.meta.env.VITE_API_URL || "http://localhost:5001/api",
+  import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:5001/api" : "/api"),
 );
 
 const TOKEN_KEY = "munim-auth-token";
@@ -58,9 +59,13 @@ export const api = async (path, { method = "GET", body, form } = {}) => {
 
   const data = await response.json().catch(() => null);
   if (!response.ok) {
-    const error = new Error(
-      data?.message || data?.error || "That didn't work. Try again.",
-    );
+    // The server's catch-all 404 means this app and the server it talks to
+    // are different versions, which a person can't fix by retrying
+    const message =
+      response.status === 404 && data?.message === "Route not found"
+        ? "Munim.AI's server is on an older version than this page. Try again in a few minutes."
+        : data?.message || data?.error || "That didn't work. Try again.";
+    const error = new Error(message);
     error.status = response.status;
     throw error;
   }

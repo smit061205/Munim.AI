@@ -1,4 +1,4 @@
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import {
   BrowserRouter as Router,
   Navigate,
@@ -8,26 +8,38 @@ import {
 } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
-import AppLayout from "./components/AppLayout";
 import SectionLayout from "./components/SectionLayout";
 import { ToastProvider } from "./components/ui";
 
+import ErrorBoundary from "./components/ErrorBoundary";
 import LandingPage from "./pages/LandingPage";
 import SignInPage from "./pages/SignInPage";
 import SignUpPage from "./pages/SignUpPage";
-import OnboardingPage from "./pages/OnboardingPage";
-import TodayPage from "./pages/TodayPage";
-import PortfolioPage from "./pages/PortfolioPage";
-import CashFlowPage from "./pages/CashFlowPage";
-import AccountsPage from "./pages/AccountsPage";
-import WealthPage from "./pages/WealthPage";
-import GoalsPage from "./pages/GoalsPage";
-import CalculatorsPage from "./pages/CalculatorsPage";
-import ReportsPage from "./pages/ReportsPage";
-import TaxPage from "./pages/TaxPage";
-import ImportPage from "./pages/ImportPage";
-import AssistantPage from "./pages/AssistantPage";
-import SettingsPage from "./pages/SettingsPage";
+
+// Everything else loads when first opened, so the first visit stays light
+const page = (load, name = "default") => lazy(() => load().then((module) => ({ default: module[name] })));
+const ForgotPasswordPage = page(() => import("./pages/AccountEmailPages"), "ForgotPasswordPage");
+const ResetPasswordPage = page(() => import("./pages/AccountEmailPages"), "ResetPasswordPage");
+const VerifyEmailPage = page(() => import("./pages/AccountEmailPages"), "VerifyEmailPage");
+const PrivacyPage = page(() => import("./pages/LegalPages"), "PrivacyPage");
+const TermsPage = page(() => import("./pages/LegalPages"), "TermsPage");
+const AppLayout = page(() => import("./components/AppLayout"));
+const TodayPage = page(() => import("./pages/TodayPage"));
+const SharedPage = page(() => import("./pages/SharedPage"));
+const OnboardingPage = page(() => import("./pages/OnboardingPage"));
+const PortfolioPage = page(() => import("./pages/PortfolioPage"));
+const CashFlowPage = page(() => import("./pages/CashFlowPage"));
+const AccountsPage = page(() => import("./pages/AccountsPage"));
+const WealthPage = page(() => import("./pages/WealthPage"));
+const GoalsPage = page(() => import("./pages/GoalsPage"));
+const CalculatorsPage = page(() => import("./pages/CalculatorsPage"));
+const ReportsPage = page(() => import("./pages/ReportsPage"));
+const TaxPage = page(() => import("./pages/TaxPage"));
+const ImportPage = page(() => import("./pages/ImportPage"));
+const AssistantPage = page(() => import("./pages/AssistantPage"));
+const SettingsPage = page(() => import("./pages/SettingsPage"));
+const HelpPage = page(() => import("./pages/HelpPage"));
+const AdminPage = page(() => import("./pages/AdminPage"));
 
 const MONEY_PAGES = [
   { to: "/money", label: "Transactions", end: true },
@@ -70,10 +82,18 @@ function App() {
     <AuthProvider>
       <ToastProvider>
         <Router>
+          <ErrorBoundary>
+          <Suspense fallback={<div className="min-h-screen bg-canvas" aria-label="Loading" />}>
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/sign-in" element={<SignInPage />} />
             <Route path="/sign-up" element={<SignUpPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/verify-email" element={<VerifyEmailPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/terms" element={<TermsPage />} />
+            <Route path="/shared/:token" element={<SharedPage />} />
             <Route
               path="/onboarding"
               element={
@@ -115,6 +135,8 @@ function App() {
               <Route path="/import" element={<ImportPage />} />
               <Route path="/assistant" element={<AssistantPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/help" element={<HelpPage />} />
+              <Route path="/admin" element={<AdminPage />} />
             </Route>
 
             <Route path="/home" element={<Navigate to="/today" replace />} />
@@ -132,6 +154,8 @@ function App() {
             <Route path="/permissions" element={<Navigate to="/settings?section=privacy" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </Suspense>
+          </ErrorBoundary>
         </Router>
       </ToastProvider>
     </AuthProvider>

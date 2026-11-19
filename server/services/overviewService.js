@@ -28,6 +28,7 @@ import {
 } from "./returnsService.js";
 import { BENCHMARK, getHistory, peekHistory } from "./marketDataService.js";
 import { refreshIfStale } from "./priceService.js";
+import { buildXray } from "./xrayService.js";
 import {
   buildUpcoming,
   findRecurring,
@@ -76,6 +77,10 @@ const OTHER_LABELS = {
   nps: "NPS",
   sgb: "Sovereign gold bond",
   bond: "Bond",
+  us_stock: "US shares",
+  crypto: "Crypto",
+  esop: "ESOPs or RSUs",
+  gold: "Gold",
   other: "Other",
 };
 
@@ -205,7 +210,13 @@ const buildPortfolio = (doc, epf, cash, target) => {
         startDate: item.start_date || null,
         maturityDate: item.maturity_date || null,
         monthlyDeposit: item.monthly_deposit || 0,
-        priceSource: ["fd", "rd", "bond"].includes(item.kind) && item.rate ? "rate" : "manual",
+        priceSource: ["fd", "rd", "bond"].includes(item.kind) && item.rate
+          ? "rate"
+          : item.price_date ? "live" : "manual",
+        symbol: item.symbol || null,
+        quantity: item.kind === "gold" ? item.grams : item.quantity,
+        price: item.price || null,
+        priceDate: item.price_date || null,
         purchaseDate: null,
         trades: otherInvestmentTrades(item, today),
         goalId: item.goal_id || null,
@@ -266,6 +277,7 @@ const buildPortfolio = (doc, epf, cash, target) => {
       raw: raw ? { ...raw, _id: undefined } : undefined,
     })),
     returns: buildReturns(holdings, today),
+    xray: buildXray(holdings, today),
     sips: buildSips(funds, today),
     pricesAsOf: latestPriceDate(holdings),
     pricesRefreshedAt: doc?.portfolio?.prices_refreshed_at || null,
@@ -417,6 +429,34 @@ const buildSpending = (transactions) => {
   return [...totals.entries()]
     .map(([category, amount]) => ({ category, amount: round(amount) }))
     .sort((a, b) => b.amount - a.amount);
+};
+
+// Income sources on one side, spending categories and savings on the other,
+// for the money flow chart. Small categories fold into "Other".
+const buildFlow = (transactions) => {
+  const since = toDateKey(new Date(Date.now() - SPENDING_WINDOW_DAYS * 24 * 60 * 60 * 1000));
+  const income = new Map();
+  const spent = new Map();
+  for (const row of transactions) {
+    if (row.date < since) continue;
+    const target = row.type === "income" ? income : spent;
+    target.set(row.category, (target.get(row.category) || 0) + Math.abs(row.amount));
+  }
+  const fold = (map, keep) => {
+    const sorted = [...map.entries()].sort((a, b) => b[1] - a[1]);
+    const top = sorted.slice(0, keep).map(([name, amount]) => ({ name, amount: round(amount) }));
+    const rest = sorted.slice(keep).reduce((sum, [, amount]) => sum + amount, 0);
+    return rest > 0 ? [...top, { name: "Other", amount: round(rest) }] : top;
+  };
+  const totalIn = [...income.values()].reduce((sum, value) => sum + value, 0);
+  const totalOut = [...spent.values()].reduce((sum, value) => sum + value, 0);
+  if (!totalIn || !totalOut) return null;
+  return {
+    sources: fold(income, 3),
+    uses: fold(spent, 6),
+    saved: round(Math.max(totalIn - totalOut, 0)),
+    shortfall: round(Math.max(totalOut - totalIn, 0)),
+  };
 };
 
 // Spending is worked out from transactions, so budgets are always current
@@ -675,10 +715,10 @@ const buildInsights = ({
   return insights;
 };
 
-const recordSnapshot = async (userId, value) => {
+const recordSnapshot = async (userId, value, portfolio) => {
   await NetWorthSnapshot.updateOne(
     { user_id: userId, date: toDateKey(new Date()) },
-    { $set: { value } },
+    { $set: { value, portfolio: portfolio.value, invested: portfolio.invested } },
     { upsert: true },
   );
 };
@@ -793,13 +833,13 @@ export const getOverview = async (user) => {
     grossAssets === 0 && liabilities.total === 0 && transactions.length === 0;
 
   if (!isEmpty) {
-    await recordSnapshot(userId, netWorthValue);
+    await recordSnapshot(userId, netWorthValue, portfolio);
   }
 
   const history = await NetWorthSnapshot.find({ user_id: userId })
     .sort({ date: 1 })
     .limit(400)
-    .select("date value -_id")
+    .select("date value portfolio invested -_id")
     .lean();
 
   const monthAgo = toDateKey(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
@@ -825,6 +865,7 @@ export const getOverview = async (user) => {
     credit,
     cashflow,
     spending: buildSpending(transactions),
+    flow: buildFlow(transactions),
     budgets,
     goals,
     health,

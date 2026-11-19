@@ -1,12 +1,16 @@
 export const errorHandler = (err, req, res, next) => {
+  if (err.code === "LIMIT_FILE_SIZE") {
+    err.statusCode = 413;
+    err.message = "That file is over 4 MB. Export a shorter date range, or split the statement, and try again.";
+  }
   const statusCode = err.statusCode || 500;
-  const message = err.message || "Internal Server Error";
+  const message = statusCode >= 500 && process.env.NODE_ENV === "production" ? "Something went wrong on our side. Try again." : err.message || "Internal Server Error";
 
   res.status(statusCode).json({
     success: false,
     status: statusCode,
     message,
-    stack: process.env.NODE_ENV === "development" ? err.stack : {},
+    ...(process.env.NODE_ENV === "development" ? { stack: err.stack } : {}),
   });
 };
 

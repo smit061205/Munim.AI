@@ -36,7 +36,7 @@ const whenLabel = (date) => {
   return formatDayMonth(date);
 };
 
-const KIND = { bill: "Bill", emi: "EMI", sip: "SIP", insurance: "Premium", subscription: "Subscription" };
+const KIND = { bill: "Bill", emi: "EMI", sip: "SIP", insurance: "Premium", subscription: "Subscription", tax: "Tax" };
 
 const AskLink = ({ question, label = "Ask Munim" }) => {
   const { ask } = useAssistant();
@@ -155,7 +155,7 @@ const attentionItems = (data) => {
         icon: CalendarClock,
         title: `${item.name} ${daysUntil(item.date) <= 0 ? "is due today" : `is due ${whenLabel(item.date).toLowerCase()}`}`,
         body: `${KIND[item.kind] || "Payment"}${item.amount ? ` of ${formatMoney(item.amount)}` : ""}.`,
-        href: "/money/bills",
+        href: item.href || "/money/bills",
       });
     }
   }

@@ -52,7 +52,7 @@ export const syncNotifications = async (user, overview) => {
       kind: "bill",
       title: `${item.name} is due ${item.date === today ? "today" : `on ${item.date}`}`,
       body: item.amount ? `${money(item.amount)}` : undefined,
-      href: UPCOMING_HREF[item.kind] || "/today",
+      href: item.href || UPCOMING_HREF[item.kind] || "/today",
     }));
   }
 
@@ -81,6 +81,22 @@ export const syncNotifications = async (user, overview) => {
       body: `${money(budget.spentAmount)} of ${money(budget.budgetAmount)} this month.`,
       href: "/money/budgets",
     }));
+  }
+
+  // A big day for the investments, from the daily snapshots
+  const valued = (data.netWorth?.history || []).filter((row) => typeof row.portfolio === "number" && row.portfolio > 0);
+  if (valued.length >= 2) {
+    const [before, latest] = valued.slice(-2);
+    const change = ((latest.portfolio - before.portfolio) / before.portfolio) * 100;
+    if (Math.abs(change) >= 3 && latest.date === today) {
+      jobs.push(notify(userId, {
+        key: `portfolio-move:${today}`,
+        kind: "price",
+        title: `Your investments ${change > 0 ? "rose" : "fell"} ${Math.abs(change).toFixed(1)}% since ${before.date}`,
+        body: `Now ${money(latest.portfolio)}, ${change > 0 ? "up" : "down"} ${money(Math.abs(latest.portfolio - before.portfolio))}.`,
+        href: "/wealth/investments",
+      }));
+    }
   }
 
   for (const goal of data.goals || []) {
@@ -194,21 +210,34 @@ export const sendWeeklyDigest = async (user) => {
 const istHour = () => Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", hour12: false }).format(new Date()));
 const istWeekday = () => new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", weekday: "short" }).format(new Date());
 
-const lastDaily = new Map();
 let running = false;
 
 // Once an hour: from 8am IST, each user's reminders are refreshed once a day
 // (which also refreshes stale prices), and on Mondays the digest goes out
-const runJobs = async () => {
-  if (running || istHour() < 8) return;
+// The daily cron passes a time budget: users left over when it runs out are
+// picked up by the next run, since each step remembers what it has done.
+export const runJobs = async ({ budgetMs = Infinity, anyHour = false } = {}) => {
+  if (running || (!anyHour && istHour() < 8)) return { processed: 0, remaining: 0 };
   running = true;
+  const started = Date.now();
+  let processed = 0;
+  let remaining = 0;
   const today = todayKey();
   const week = weekKey();
   const monday = istWeekday() === "Mon";
 
   try {
-    const users = await User.find({ email: { $ne: "demo@munim.local" } }).select("email firstName preferences emailVerified digestSentWeek investorProfile").limit(5000);
-    for (const user of users) {
+    // Least recently synced first, so a run cut short starts there next time
+    const users = await User.find({ email: { $ne: "demo@munim.local" } })
+      .sort({ remindersSyncedOn: 1 })
+      .select("email firstName preferences emailVerified digestSentWeek remindersSyncedOn investorProfile")
+      .limit(5000);
+    for (const [index, user] of users.entries()) {
+      if (Date.now() - started > budgetMs) {
+        remaining = users.length - index;
+        break;
+      }
+      processed += 1;
       const userId = user._id.toString();
       try {
         let overview = null;
@@ -218,9 +247,10 @@ const runJobs = async () => {
           user.digestSentWeek = week;
           await user.save();
         }
-        if (lastDaily.get(userId) !== today) {
+        if (user.remindersSyncedOn !== today) {
           await syncNotifications(user, overview);
-          lastDaily.set(userId, today);
+          user.remindersSyncedOn = today;
+          await user.save();
         }
       } catch (error) {
         console.error(`Scheduled jobs failed for ${userId}:`, error.message);
@@ -229,6 +259,7 @@ const runJobs = async () => {
   } finally {
     running = false;
   }
+  return { processed, remaining };
 };
 
 export const startScheduler = () => {

@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
 import { api } from "../lib/api";
 import { downloadFile } from "../lib/format";
+import { canUseAppLock, disableAppLock, enableAppLock, lockCredential } from "../lib/appLock";
 import RiskProfileSummary from "../components/RiskProfileSummary";
 import {
   Button,
@@ -26,6 +27,7 @@ const SECTIONS = [
   { value: "privacy", label: "Data and privacy" },
   { value: "preferences", label: "Preferences" },
   { value: "assistant", label: "Assistant" },
+  { value: "sharing", label: "Sharing" },
   { value: "security", label: "Security" },
 ];
 
@@ -414,6 +416,47 @@ const DeleteAccountModal = ({ onClose }) => {
   );
 };
 
+const AppLockCard = () => {
+  const { user } = useAuth();
+  const toast = useToast();
+  const [available, setAvailable] = useState(null);
+  const [enabled, setEnabled] = useState(() => !!lockCredential());
+
+  useEffect(() => {
+    canUseAppLock().then(setAvailable);
+  }, []);
+
+  if (available === null) return null;
+  return (
+    <Card className="p-5">
+      <SectionTitle
+        title="Lock with face or fingerprint"
+        description={
+          available
+            ? "Ask for Face ID, Touch ID, a fingerprint or your device PIN when Munim opens on this device."
+            : "This device or browser doesn't offer a face, fingerprint or PIN check."
+        }
+      />
+      {available && (
+        <Toggle
+          label="Lock Munim on this device"
+          checked={enabled}
+          onChange={async (next) => {
+            try {
+              if (next) await enableAppLock(user);
+              else disableAppLock();
+              setEnabled(next);
+              toast.success(next ? "Munim will ask to unlock on this device" : "Lock turned off");
+            } catch {
+              toast.error("The lock wasn't set up. Try again.");
+            }
+          }}
+        />
+      )}
+    </Card>
+  );
+};
+
 const SecuritySection = () => {
   const [changing, setChanging] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -426,6 +469,7 @@ const SecuritySection = () => {
           Change password
         </Button>
       </Card>
+      <AppLockCard />
       <Card className="p-5">
         <SectionTitle
           title="Delete account"
@@ -441,12 +485,133 @@ const SecuritySection = () => {
   );
 };
 
+// Read-only links for a partner or a CA. The link is shown once, when made.
+const SharingSection = () => {
+  const toast = useToast();
+  const [links, setLinks] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const [made, setMade] = useState(null);
+  const [form, setForm] = useState({ label: "", days: "30", includeTax: false });
+
+  const load = useCallback(async () => {
+    try {
+      const { data } = await api("/share");
+      setLinks(data);
+    } catch (error) {
+      toast.error(error.message);
+      setLinks([]);
+    }
+  }, [toast]);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const urlFor = (token) => `${window.location.origin}/shared/${token}`;
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <Card className="p-5">
+        <SectionTitle
+          title="Read-only links"
+          description="Let a partner, family member or CA see your net worth, investments, goals and, if you choose, your tax summary. They can't change anything or see transactions."
+        >
+          <Button size="sm" onClick={() => setCreating(true)}>New link</Button>
+        </SectionTitle>
+        {made && (
+          <div className="rounded-lg bg-accent-soft p-3 mb-4 text-sm">
+            <p className="font-medium mb-1">Copy this link now. It won't be shown again.</p>
+            <div className="flex gap-2">
+              <Input readOnly value={urlFor(made.token)} onFocus={(event) => event.target.select()} aria-label="Share link" />
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(urlFor(made.token));
+                    toast.success("Link copied");
+                  } catch {
+                    toast.error("Couldn't copy. Select the link and copy it yourself.");
+                  }
+                }}
+              >
+                Copy
+              </Button>
+            </div>
+          </div>
+        )}
+        {links === null ? (
+          <p className="text-muted">Loading...</p>
+        ) : links.length === 0 ? (
+          <p className="text-muted">No links yet.</p>
+        ) : (
+          <ul className="divide-y divide-line border-t border-line">
+            {links.map((link) => (
+              <li key={link.id} className="flex items-center justify-between gap-4 py-3">
+                <div className="min-w-0">
+                  <p className="font-medium">{link.label}</p>
+                  <p className="text-sm text-muted">
+                    {link.includeTax ? "Includes tax. " : ""}Ends {new Date(link.expiresAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}.{" "}
+                    {link.views ? `Opened ${link.views} ${link.views === 1 ? "time" : "times"}.` : "Not opened yet."}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={async () => {
+                    await api(`/share/${link.id}`, { method: "DELETE" });
+                    toast.success("Link turned off");
+                    load();
+                  }}
+                >
+                  Turn off
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+      {creating && (
+        <FormModal
+          title="New read-only link"
+          submitLabel="Create link"
+          onClose={() => setCreating(false)}
+          onSubmit={async () => {
+            const { data } = await api("/share", {
+              method: "POST",
+              body: { label: form.label, days: Number(form.days), includeTax: form.includeTax },
+            });
+            setMade(data);
+            setForm({ label: "", days: "30", includeTax: false });
+            await load();
+          }}
+        >
+          <Field label="Who is it for?">
+            <Input required value={form.label} onChange={(event) => setForm({ ...form, label: event.target.value })} placeholder="My CA, Priya" />
+          </Field>
+          <Field label="Works for">
+            <Select value={form.days} onChange={(event) => setForm({ ...form, days: event.target.value })}>
+              <option value="7">7 days</option>
+              <option value="30">30 days</option>
+              <option value="90">90 days</option>
+            </Select>
+          </Field>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={form.includeTax} onChange={(event) => setForm({ ...form, includeTax: event.target.checked })} />
+            Include capital gains and deductions, for filing
+          </label>
+        </FormModal>
+      )}
+    </div>
+  );
+};
+
 const CONTENT = {
   profile: ProfileSection,
   investor: InvestorSection,
   privacy: PrivacySection,
   preferences: PreferencesSection,
   assistant: AssistantSection,
+  sharing: SharingSection,
   security: SecuritySection,
 };
 

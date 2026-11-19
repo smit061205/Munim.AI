@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
 import AuthShell, {
@@ -9,6 +9,8 @@ import AuthShell, {
 
 export default function SignInPage() {
   const { isSignedIn, signIn, signInDemo } = useAuth();
+  const [params] = useSearchParams();
+  const resetDone = params.get("reset") === "1";
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -69,6 +71,9 @@ export default function SignInPage() {
         </>
       }
     >
+      {resetDone && (
+        <p className="mb-5 px-3 py-2 rounded-lg bg-gain-soft text-gain text-sm">Password updated. Sign in with your new one.</p>
+      )}
       <form onSubmit={handleSubmit} className="space-y-5">
         <div>
           <label
@@ -89,12 +94,14 @@ export default function SignInPage() {
           />
         </div>
         <div>
-          <label
-            htmlFor="password"
-            className="block text-sm font-medium text-ink mb-2"
-          >
-            Password
-          </label>
+          <div className="flex items-baseline justify-between mb-2">
+            <label htmlFor="password" className="block text-sm font-medium text-ink">
+              Password
+            </label>
+            <Link to="/forgot-password" className="text-sm text-accent hover:underline">
+              Forgot password?
+            </Link>
+          </div>
           <input
             id="password"
             name="password"

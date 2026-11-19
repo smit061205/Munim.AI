@@ -1,5 +1,5 @@
 import { Investment } from "../models/Financial.js";
-import { findScheme, getNavTable, getQuote } from "./marketDataService.js";
+import { findScheme, getNavTable, getQuote, priceInInr } from "./marketDataService.js";
 
 const STALE_MS = 6 * 60 * 60 * 1000;
 const WAIT_MS = 2500;
@@ -58,9 +58,29 @@ export const refreshPrices = async (doc) => {
     }),
   );
 
+  // US shares, crypto, ESOPs and gold, priced in rupees
+  let others = 0;
+  await Promise.all(
+    (portfolio.other || [])
+      .filter((item) => ["us_stock", "crypto", "esop", "gold"].includes(item.kind))
+      .map(async (item) => {
+        const units = item.kind === "gold" ? item.grams : item.quantity;
+        if (!units || (item.kind !== "gold" && !item.symbol)) return;
+        try {
+          const { price, asOf } = await priceInInr(item);
+          item.price = Math.round(price * 100) / 100;
+          item.price_date = asOf.slice(0, 10);
+          item.current_value = Math.round(units * price);
+          others += 1;
+        } catch (error) {
+          console.warn(`Price for ${item.symbol || item.kind} failed:`, error.message);
+        }
+      }),
+  );
+
   portfolio.total_value = sumValues(portfolio);
   portfolio.prices_refreshed_at = new Date();
-  return { funds, stocks };
+  return { funds, stocks: stocks + others };
 };
 
 const inFlight = new Map();

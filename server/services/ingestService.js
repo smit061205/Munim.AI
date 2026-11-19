@@ -1,5 +1,5 @@
 import XLSX from "xlsx";
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID as uuidv4 } from "node:crypto";
 import { Transaction } from "../models/Financial.js";
 import { categorize, UNSORTED } from "./categorizeService.js";
 import { aiJson, canUseAi } from "./aiTaskService.js";

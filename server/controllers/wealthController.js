@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID as uuidv4 } from "node:crypto";
 import {
   Asset,
   CreditScore,
@@ -127,18 +127,30 @@ const LIABILITY_FIELDS = [
   "interest_rate",
   "loan_term_months",
   "due_day",
+  "name",
+  "credit_limit",
+  "statement_day",
 ];
 
-const checkDueDay = (item) => {
-  if (item.due_day === undefined || item.due_day === null || item.due_day === "") {
-    delete item.due_day;
+const checkDay = (item, key, what) => {
+  if (item[key] === undefined || item[key] === null || item[key] === "") {
+    delete item[key];
     return;
   }
-  const day = Number(item.due_day);
+  const day = Number(item[key]);
   if (!Number.isInteger(day) || day < 1 || day > 31) {
-    throw new ApiError(400, "Choose a due date between the 1st and the 31st");
+    throw new ApiError(400, `Choose a ${what} between the 1st and the 31st`);
   }
-  item.due_day = day;
+  item[key] = day;
+};
+
+const checkDueDay = (item) => {
+  checkDay(item, "due_day", "due date");
+  checkDay(item, "statement_day", "statement date");
+  if (item.credit_limit !== undefined && item.credit_limit !== null && item.credit_limit !== "") {
+    positiveNumber(item.credit_limit, "credit limit");
+  }
+  if (typeof item.name === "string") item.name = item.name.trim().slice(0, 60);
 };
 
 export const addLiability = handle(async (req, res) => {
@@ -161,10 +173,9 @@ export const updateLiability = handle(async (req, res) => {
   if (!item) throw new ApiError(404, "Debt not found");
 
   const fields = pickFields(req.body, LIABILITY_FIELDS);
-  if ("due_day" in fields) {
-    checkDueDay(fields);
-    if (!("due_day" in fields)) item.due_day = undefined;
-  }
+  const days = ["due_day", "statement_day"].filter((key) => key in fields);
+  checkDueDay(fields);
+  for (const key of days) if (!(key in fields)) item[key] = undefined;
   Object.assign(item, fields);
   await doc.save();
   res.json({ success: true, data: item });

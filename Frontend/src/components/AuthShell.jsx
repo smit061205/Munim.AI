@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { Logo } from "./AppLayout";
+import { Logo } from "./Logo";
 
 export const inputClassName =
   "w-full h-11 px-3 bg-surface border border-line-strong rounded-lg text-ink placeholder:text-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors";

@@ -19,18 +19,17 @@
   "author": "Munim.AI Team",
   "license": "MIT",
   "dependencies": {
-    "axios": "^1.7.7",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
     "express-rate-limit": "^8.7.2",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.8.3",
     "multer": "^1.4.5-lts.1",
     "pdfjs-dist": "4.10.38",
-    "uuid": "^9.0.0",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
