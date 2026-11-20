@@ -209,7 +209,7 @@ const UsageLine = () => {
   const left = Math.max(usage.messagesLimit - usage.messagesUsed, 0);
   return (
     <p className="text-xs text-muted tnum">
-      {left} of {usage.messagesLimit} messages left today
+      {usage.dailyUnlimited ? "No daily message limit" : `${left} of ${usage.messagesLimit} messages left today`}
       {contextTokens > 0 && (
         <>
           . Conversation memory{" "}
@@ -260,7 +260,7 @@ export default function AssistantChat() {
     if (element) element.scrollTop = element.scrollHeight;
   }, [messages]);
 
-  const outOfMessages = usage && !usage.unlimited && usage.messagesUsed >= usage.messagesLimit;
+  const outOfMessages = usage && !usage.unlimited && !usage.dailyUnlimited && usage.messagesUsed >= usage.messagesLimit;
   const unavailable = usage && usage.available === false;
   const maxChars = usage?.maxMessageChars || 4000;
 

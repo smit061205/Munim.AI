@@ -10,9 +10,16 @@ const numberFromEnv = (name, fallback) => {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 };
 
+// Messages per day: unset or 0 means no daily cap. The monthly token
+// allowance still guards the cost.
+const dailyLimitFromEnv = () => {
+  const value = Number(process.env.AI_DAILY_MESSAGE_LIMIT);
+  return Number.isFinite(value) && value > 0 ? value : null;
+};
+
 // Every limit is an env setting so it can change without a deploy of the code
 export const getLimits = () => ({
-  dailyMessages: numberFromEnv("AI_DAILY_MESSAGE_LIMIT", 20),
+  dailyMessages: dailyLimitFromEnv(),
   perMinuteMessages: numberFromEnv("AI_PER_MINUTE_LIMIT", 5),
   monthlyTokens: numberFromEnv("AI_MONTHLY_TOKEN_LIMIT", 1000000),
   contextTokens: numberFromEnv("AI_CONTEXT_TOKEN_LIMIT", 16000),
@@ -65,6 +72,7 @@ export const getUsage = async (userId) => {
     unlimited: noLimits,
     messagesUsed: day?.messages || 0,
     messagesLimit: noLimits ? null : limits.dailyMessages,
+    dailyUnlimited: noLimits || limits.dailyMessages === null,
     tokensUsed: month?.tokens || 0,
     tokensLimit: noLimits ? null : limits.monthlyTokens,
     contextLimit: limits.contextTokens,
@@ -77,6 +85,11 @@ export const getUsage = async (userId) => {
 export const reserveMessage = async (userId) => {
   if (await isUnlimited(userId)) return true;
   const { dailyMessages } = getLimits();
+  if (dailyMessages === null) {
+    // No daily cap, but still count messages so usage stays visible
+    await AiUsage.updateOne({ user_id: userId, key: dayKey() }, { $inc: { messages: 1 } }, { upsert: true });
+    return true;
+  }
   try {
     await AiUsage.findOneAndUpdate(
       { user_id: userId, key: dayKey(), messages: { $lt: dailyMessages } },

@@ -96,7 +96,7 @@ All settings live in `server/.env`:
 | --- | --- | --- |
 | `OPENROUTER_MODEL` | `google/gemini-2.5-flash-lite` | Model used for every user |
 | `OPENROUTER_FALLBACK_MODEL` | `google/gemini-3.1-flash-lite` | Used if the main model fails before replying |
-| `AI_DAILY_MESSAGE_LIMIT` | `20` | Messages per user per day, reset at midnight IST |
+| `AI_DAILY_MESSAGE_LIMIT` | none | Messages per user per day, reset at midnight IST. Empty or `0` means no daily cap |
 | `AI_PER_MINUTE_LIMIT` | `5` | Burst limit per user |
 | `AI_MONTHLY_TOKEN_LIMIT` | `1000000` | Tokens per user per month |
 | `AI_CONTEXT_TOKEN_LIMIT` | `16000` | Largest prompt sent for one reply |
