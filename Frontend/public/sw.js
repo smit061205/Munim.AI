@@ -1,6 +1,6 @@
 // Keeps the app shell so Munim opens quickly and installs to the home screen.
 // API responses are never cached: they hold personal data and must be fresh.
-const CACHE = "munim-shell-v1";
+const CACHE = "munim-shell-v2";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(["/", "/icon-192.png"])));
@@ -37,7 +37,7 @@ self.addEventListener("fetch", (event) => {
               caches.open(CACHE).then((cache) => cache.put(request, copy));
             }
             return response;
-          }),
+          }).catch(() => Response.error()),
       ),
     );
   }

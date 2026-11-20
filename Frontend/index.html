@@ -30,7 +30,21 @@
     />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Replaced as soon as the app starts; seen only if the app's script fails to load -->
+      <div id="boot-fallback" hidden style="font-family: system-ui, sans-serif; max-width: 22rem; margin: 30vh auto 0; padding: 0 16px; color: #1f2937; text-align: center">
+        <p style="font-size: 1.125rem; font-weight: 600; margin: 0 0 8px">Munim didn't load</p>
+        <p style="margin: 0 0 16px; color: #4b5563">The connection dropped while the app was loading. Check your internet and try again.</p>
+        <button onclick="location.reload()" style="height: 40px; padding: 0 18px; border: 0; border-radius: 10px; background: #2b3fb4; color: #fff; font-size: 0.95rem; cursor: pointer">Reload</button>
+      </div>
+      <script>
+        // Show the message only if the app hasn't started after 8 seconds
+        setTimeout(function () {
+          var el = document.getElementById("boot-fallback");
+          if (el) el.hidden = false;
+        }, 8000);
+      </script>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
